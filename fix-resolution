@@ -16,6 +16,7 @@ export XAUTHORITY="/home/$XUSER/.Xauthority"
 
 # Основной скрипт для генерации конфига Xorg
 generate_xorg_config() {
+    echo "Генерация конфигурации Xorg..."
     CONFIG_FILE="/etc/X11/xorg.conf.d/10-fixed-resolution.conf"
     MONITORS=$(xrandr --query | grep " connected" | cut -d" " -f1)
 
@@ -31,6 +32,7 @@ Section "Device"
     Option      "ModeDebug" "true"
 EOF
 
+    echo "Основные флаги установлены."
     # Добавляем специфичные опции для NVIDIA/AMD
     if lspci | grep -qi nvidia; then
         echo '    Option "CustomEDID" "none"' >> "$CONFIG_FILE"
@@ -41,6 +43,7 @@ EOF
 
     echo 'EndSection' >> "$CONFIG_FILE"
 
+    echo "Заполнение секций мониторов..."
     for MONITOR in $MONITORS; do
         cat >> "$CONFIG_FILE" <<EOF
 
@@ -55,6 +58,7 @@ EndSection
 EOF
     done
 
+    echo "Заполнение секций экранов..."
     cat >> "$CONFIG_FILE" <<EOF
 
 Section "Screen"
@@ -74,6 +78,7 @@ EOF
     EndSubSection
 EndSection
 EOF
+    echo "Конфигурация Xorg сгенерирована."
 }
 
 # Демон для мониторинга изменений
@@ -92,14 +97,16 @@ resolution_daemon() {
             generate_xorg_config
             apply_resolution
             LAST_STATE="$CURRENT_STATE"
+            echo "Конфигурация применена."
         fi
         
         # Принудительно устанавливаем разрешение каждые 10 секунд
         for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
             CURRENT_MODE=$(xrandr --query | grep -A1 "^$MONITOR" | grep -oP '\d+x\d+' | head -1)
             if [ "$CURRENT_MODE" != "1920x1080" ]; then
-                echo "Исправляем разрешение для $MONITOR"
+                echo "Исправляем разрешение для $MONITOR..."
                 xrandr --output "$MONITOR" --mode 1920x1080 --rate 60
+                echo "Разрешение для $MONITOR установлено в 1920x1080."
             fi
         done
         
@@ -110,9 +117,11 @@ resolution_daemon() {
 # Применение разрешения
 apply_resolution() {
     for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
-        echo "Применяем 1920x1080 для $MONITOR"
-        xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
-        xrandr --addmode "$MONITOR" "1920x1080_60.00"
+        echo "Пытается применить разрешение 1920x1080 для $MONITOR..."
+        if ! xrandr | grep -q "1920x1080"; then
+            xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+        fi
+        xrandr --addmode "$MONITOR" "1920x1080_60.00" 2>/dev/null
         xrandr --output "$MONITOR" --mode "1920x1080_60.00" --rate 60
     done
 }
