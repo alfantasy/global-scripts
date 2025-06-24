@@ -1,7 +1,7 @@
 #!/bin/bash
 CONFIG_FIXRES="/etc/fix-resolution.conf"
 
-# Взятие текущего сессионого пользователя
+# Получение активного пользователя графической сессии
 XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read session; do
     uid=$(loginctl show-session "$session" -p User --value)
     active=$(loginctl show-session "$session" -p Active --value)
@@ -11,12 +11,12 @@ XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read
     fi
 done)
 
-# Использование экспорт-переменных
+# Установка переменных окружения для взаимодействия с X-сессией пользователя
 export XUSER
 export DISPLAY=:0
 export XAUTHORITY="/home/$XUSER/.Xauthority"    
 
-# Подгрузка конфигурации
+# Загрузка конфигурации, при отсутствии - установка значений по умолчанию
 load_config() {
     DEFAULT_RESOLUTION="1920x1080"
     DEFAULT_RATE="60"
@@ -29,7 +29,7 @@ load_config() {
     RATE="${RATE:-$DEFAULT_RATE}"
 }
 
-# Генерирование конфигурации
+# Генерация xorg.conf с учетом выбранного разрешения
 generate_xorg_config() {
     echo "Генерация конфигурации Xorg..."
     CONFIG_FILE="/etc/X11/xorg.conf.d/10-fixed-resolution.conf"
@@ -43,6 +43,7 @@ generate_xorg_config() {
     MODELINE="${MODELINE_RAW#Modeline }"
     MODE_NAME=$(echo "$MODELINE_RAW" | awk '{print $2}')
 
+    # Начальные секции конфигурации Xorg
     cat > "$CONFIG_FILE" <<EOF
 Section "ServerFlags"
     Option "AutoAddDevices" "false"
@@ -55,6 +56,7 @@ Section "Device"
     Option      "ModeDebug" "true"
 EOF
 
+    # Специфика драйверов для NVIDIA и AMD
     if lspci | grep -qi nvidia; then
         echo '    Option "CustomEDID" "none"' >> "$CONFIG_FILE"
         echo '    Option "ModeValidation" "NoEdidModes"' >> "$CONFIG_FILE"
@@ -64,6 +66,7 @@ EOF
 
     echo 'EndSection' >> "$CONFIG_FILE"
 
+    # Мониторные секции с заданным разрешением
     for MONITOR in $MONITORS; do
         cat >> "$CONFIG_FILE" <<EOF
 
@@ -78,6 +81,7 @@ EndSection
 EOF
     done
 
+    # Раздел экрана, связывающий GPU и мониторы
     cat >> "$CONFIG_FILE" <<EOF
 
 Section "Screen"
@@ -101,6 +105,7 @@ EOF
     echo "Конфигурация Xorg сгенерирована."
 }
 
+# Демон, следящий за изменениями подключений мониторов
 resolution_daemon() {
     echo "Запуск демона мониторинга разрешения..."
     LAST_STATE=$(xrandr --query | grep " connected")
@@ -142,8 +147,8 @@ resolution_daemon() {
     done
 }
 
+# Применение конфигурации вручную
 apply_resolution() {
-    # Применяем конфигурацию
     load_config
 
     WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1) # Ширина
@@ -165,6 +170,7 @@ apply_resolution() {
     done
 }
 
+# Создание systemd-сервиса для автозапуска демона
 create_systemd_service() {
     echo "Регистрация systemd сервиса..."
     SERVICE_FILE="/etc/systemd/system/resolution-fix.service"
@@ -213,17 +219,25 @@ case "$1" in
         ;;
     --help)
         echo "Использование fix-resolution:"
-        echo "  $0 --start - применение конфигурации без активации демона в системе"
-        echo "  $0 --daemon - базовая регистрация демона в системе"
-        echo "  $0 --install - полная инсталляция демона в systemd в записью в автозагрузку"
+        echo "  $0 --start - применение конфигурации без демона"
+        echo "  $0 --daemon - запуск в режиме постоянного слежения"
+        echo "  $0 --install - установка systemd-сервиса"
+        echo "  $0 --config set KEY VALUE - изменение конфигурации"
+        echo "  $0 --config show - просмотр текущей конфигурации"        
         ;;
     --config)
-        mkdir -p "$(dirname "$CONFIG_FIXRES")"
+        mkdir -p "$(dirname \"$CONFIG_FIXRES\")"
 
         case "$2" in
             set)
                 KEY="$3"
                 VALUE="$4"
+                # Разрешённые ключи
+                if [[ "$KEY" != "RESOLUTION" && "$KEY" != "RATE" ]]; then
+                    echo "Ошибка: допустимы только ключи RESOLUTION и RATE."
+                    exit 1
+                fi
+
                 if grep -q "^${KEY}=" "$CONFIG_FIXRES" 2>/dev/null; then
                     sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG_FIXRES"
                 else
@@ -240,7 +254,7 @@ case "$1" in
                 echo "  $0 --config set ключ значение"
                 echo "  $0 --config show"
                 echo "  "
-                echo " Основные переменные: "
+                echo " Допустимые ключи: "
                 echo "  - RESOLUTION=<ширина>x<высота>"
                 echo "  - RATE=<частота>"
                 echo "  "
