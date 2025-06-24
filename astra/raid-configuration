@@ -6,15 +6,15 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-read -t 10 -p "\033[1;37mВведите имя установленного LVM Volume Group: \033[0m" MANUAL_VG_ID
+read -t 10 -p -e "\033[1;37mВведите имя установленного LVM Volume Group: \033[0m" MANUAL_VG_ID
 
 MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
 
 if [ -n "$MANUAL_VG_ID" ]; then
     MAIN_LVM_VGID="$MANUAL_VG_ID"
-    echo "\033[1;37mИспользуется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+    echo -e "\033[1;37mИспользуется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
 else
-    echo "\033[1;37mИспользуется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+    echo -e "\033[1;37mИспользуется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
 fi
 
 if [ -z "$MAIN_LVM_VGID" ]; then
