@@ -5,3 +5,10 @@ if [ "$(id -u)" != "0" ]; then
     echo -e "\033[1;34mЗапустите скрипт через sudo или зайдите под суперпользователя и повторите попытку.\033[0m" 1>&2
     exit 1
 fi
+
+MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_) | sort -u)')
+
+if [ -z "$MAIN_LVM_VGID" ]; then
+    echo -e "\033[1;37mНе удалось определить главный LVM Volume Group.\033[0m" 1>&2
+    exit 1
+fi
