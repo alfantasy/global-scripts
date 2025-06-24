@@ -1,5 +1,7 @@
 #!/bin/bash
+CONFIG_FIXRES="/etc/fix-resolution.conf"
 
+# Взятие текущего сессионого пользователя
 XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read session; do
     uid=$(loginctl show-session "$session" -p User --value)
     active=$(loginctl show-session "$session" -p Active --value)
@@ -9,15 +11,39 @@ XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read
     fi
 done)
 
+# Использование экспорт-переменных
 export XUSER
 export DISPLAY=:0
 export XAUTHORITY="/home/$XUSER/.Xauthority"    
 
+# Подгрузка конфигурации
+load_config() {    
+    RESOLUTION="1920x1080"
+    RATE="60"
+
+    if [ -f "$CONFIG_FIXRES" ]; then
+        source "$CONFIG_FIXRES"
+    fi
+}
+
+# Генерирование конфигурации
 generate_xorg_config() {
     echo "Генерация конфигурации Xorg..."
+    # Берем основной файл для фиксированного разрешения
     CONFIG_FILE="/etc/X11/xorg.conf.d/10-fixed-resolution.conf"
+    # Берем подключение мониторы
     MONITORS=$(xrandr --query | grep " connected" | cut -d" " -f1)
 
+    # Загружаем конфигурацию
+    load_config
+    WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1)
+    HEIGHT=$(echo "$RESOLUTION" | cut -d"x" -f2)
+    # Генерируем модельную строку через cvt
+    MODELINE_RAW=$(cvt "$WIDTH" "$HEIGHT" "$RATE" | grep Modeline)
+    # Удаляем слово "Modeline" из начала строки, чтобы вставить в конфиг
+    MODELINE="${MODELINE_RAW#Modeline }"
+
+    # Записываем начальные секции, а это именно серверные флаги, запрещаем конфигурировать все автоматически
     cat > "$CONFIG_FILE" <<EOF
 Section "ServerFlags"
     Option "AutoAddDevices" "false"
@@ -40,17 +66,18 @@ EOF
 
     echo 'EndSection' >> "$CONFIG_FILE"
 
+    # Заполняем пользовательские разрешения и перечисляем все существующие мониторы
     echo "Заполнение секций мониторов..."
     for MONITOR in $MONITORS; do
         cat >> "$CONFIG_FILE" <<EOF
 
 Section "Monitor"
     Identifier  "$MONITOR"
-    Option      "PreferredMode" "1920x1080"
+    Option      "PreferredMode" "$RESOLUTION"
     Option      "IgnoreEDID" "true"
     Option      "UseEDID" "false"
     Option      "DPMS" "false"
-    Modeline    "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+    Modeline    $MODELINE
 EndSection
 EOF
     done
@@ -64,6 +91,7 @@ Section "Screen"
     DefaultDepth 24
 EOF
 
+    # Заполняем модификаторы дисплеев
     for MONITOR in $MONITORS; do
         echo "    Monitor     \"$MONITOR\"" >> "$CONFIG_FILE"
     done
@@ -71,7 +99,7 @@ EOF
     cat >> "$CONFIG_FILE" <<EOF
     SubSection "Display"
         Depth    24
-        Modes    "1920x1080_60.00"
+        Modes    "${RESOLUTION}_${RATE}.00"
     EndSubSection
 EndSection
 EOF
@@ -110,13 +138,18 @@ resolution_daemon() {
 }
 
 apply_resolution() {
+    # Применяем конфигурацию
+    load_config
+    WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1)
+    HEIGHT=$(echo "$RESOLUTION" | cut -d"x" -f2)
+    # Выставляем разрешение, если что-то изменилось в течении работы демона
     for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
-        echo "Сервис пытается применить разрешение 1920x1080 для $MONITOR..."
-        if ! xrandr | grep -q "1920x1080"; then
-            xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+        echo "Сервис пытается применить разрешение $RESOLUTION@$RATE для $MONITOR..."
+        if ! xrandr | grep -q "$RESOLUTION"; then
+            xrandr --newmode "${RESOLUTION}_${RATE}.00" 173.00 "$WIDTH" 2048 2248 2576 "$HEIGHT" 1083 1088 1120 -hsync +vsync
         fi
-        xrandr --addmode "$MONITOR" "1920x1080_60.00" 2>/dev/null
-        xrandr --output "$MONITOR" --mode "1920x1080_60.00" --rate 60
+        xrandr --addmode "$MONITOR" "${RESOLUTION}_${RATE}.00" 2>/dev/null
+        xrandr --output "$MONITOR" --mode "${RESOLUTION}_${RATE}.00" --rate "$RATE"
     done
 }
 
@@ -171,6 +204,32 @@ case "$1" in
         echo "  $0 --start - применение конфигурации без активации демона в системе"
         echo "  $0 --daemon - базовая регистрация демона в системе"
         echo "  $0 --install - полная инсталляция демона в systemd в записью в автозагрузку"
+        ;;
+    --config)
+        mkdir -p "$(dirname "$CONFIG_FIXRES")"
+
+        case "$2" in
+            set)
+                KEY="$3"
+                VALUE="$4"
+                if grep -q "^${KEY}=" "$CONFIG_FIXRES" 2>/dev/null; then
+                    sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG_FIXRES"
+                else
+                    echo "${KEY}=${VALUE}" >> "$CONFIG_FIXRES"
+                fi
+                echo "Конфигурация обновлена: $KEY=$VALUE"
+                ;;
+            show)
+                echo "Текущая конфигурация:"
+                cat "$CONFIG_FIXRES"
+                ;;  
+            *)
+                echo "Использование:"
+                echo "  $0 --config set ключ значение"
+                echo "  $0 --config show"
+                ;;
+        esac
+        exit 0
         ;;
     *)
         echo "Неизвестная опция: $1. Используйте fix-resolution --help для вывода справки."
