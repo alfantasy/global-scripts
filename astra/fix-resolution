@@ -140,13 +140,18 @@ resolution_daemon() {
 apply_resolution() {
     # Применяем конфигурацию
     load_config
-    WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1)
-    HEIGHT=$(echo "$RESOLUTION" | cut -d"x" -f2)
+    WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1) # Ширина
+    HEIGHT=$(echo "$RESOLUTION" | cut -d"x" -f2) # Высота
+    MODELINE=$(cvt "$WIDTH" "$HEIGHT" "$RATE" | grep Modeline) # Строка режима
+    MODE_NAME=$(echo "$MODELINE" | awk '{print $2}') # Название режима
+    MODELINE_STR="${MODELINE#Modeline }" # Строка режима без названия
     # Выставляем разрешение, если что-то изменилось в течении работы демона
     for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
         echo "Сервис пытается применить разрешение $RESOLUTION@$RATE для $MONITOR..."
-        if ! xrandr | grep -q "$RESOLUTION"; then
-            xrandr --newmode "${RESOLUTION}_${RATE}.00" 173.00 "$WIDTH" 2048 2248 2576 "$HEIGHT" 1083 1088 1120 -hsync +vsync
+        if ! xrandr | grep -q "$MODE_NAME"; then
+            echo "Добавляем режим: $MODE_NAME"
+            xrandr --newmode $MODELINE_STR
+            xrandr --addmode "$MONITOR" "$MODE_NAME"
         fi
         xrandr --addmode "$MONITOR" "${RESOLUTION}_${RATE}.00" 2>/dev/null
         xrandr --output "$MONITOR" --mode "${RESOLUTION}_${RATE}.00" --rate "$RATE"
