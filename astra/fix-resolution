@@ -164,7 +164,7 @@ case "$1" in
         generate_xorg_config
         apply_resolution
         create_systemd_service
-        echo "Установка завершена. Сервис запущен и добавлен в автозагрузку."
+        echo "Установка Fix Resolution завершена. Сервис resolution-fix.service запущен и добавлен в автозагрузку."
         ;;
     --help)
         echo "Использование fix-resolution:"
@@ -173,6 +173,6 @@ case "$1" in
         echo "  $0 --install - полная инсталляция демона в systemd в записью в автозагрузку"
         ;;
     *)
-        echo "Неизвестная опция: $1, используйте fix-resolution --help"
+        echo "Неизвестная опция: $1. Используйте fix-resolution --help для вывода справки."
         ;;
 esac
