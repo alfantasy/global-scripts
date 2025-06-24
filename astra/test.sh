@@ -5,28 +5,26 @@ get_parent_disk_from_lvm() {
     local pv
     local disk
 
-    echo "[i] Поиск VG для LVM тома: $lv_mapper_path"
+    echo "[i] Поиск VG для LVM тома: $lv_mapper_path">&2
 
     # Преобразуем /dev/mapper/VG235-lv_home → /dev/VG235/lv_home
     lv_path=$(echo "$lv_mapper_path" | sed 's|^/dev/mapper/|/dev/|' | sed 's|-|/|')
 
-    echo "[i] Преобразованный путь: $lv_path"
-
     vg_name=$(lvdisplay "$lv_path" 2>/dev/null | awk -F ' ' '/VG Name/ {print $3}')
     if [[ -z "$vg_name" ]]; then
-        echo "❌ VG не найден для $lv_path"
+        echo "❌ VG не найден для $lv_path">&2
         return 1
     fi
 
-    echo "[i] Обнаружена VG: $vg_name"
+    echo "[i] Обнаружена VG: $vg_name">&2
 
     pv=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$vg_name" '$2 == vg {print $1}' | head -n1)
     if [[ -z "$pv" ]]; then
-        echo "❌ Physical volume не найден для VG: $vg_name"
+        echo "❌ Physical volume не найден для VG: $vg_name">&2
         return 1
     fi
 
-    echo "[i] Физический раздел: $pv"
+    echo "[i] Физический раздел: $pv">&2
 
     disk=$(lsblk -no PKNAME "$pv" 2>/dev/null)
     if [[ -z "$disk" ]]; then
@@ -34,18 +32,18 @@ get_parent_disk_from_lvm() {
     fi
 
     if [[ -z "$disk" ]]; then
-        echo "❌ Не удалось определить родительский диск."
+        echo "❌ Не удалось определить родительский диск.">&2
         return 1
     fi
 
-    echo "[i] Родительский диск: /dev/$disk"
+    echo "/dev/$disk"
 }
 
 # Поиск LVM-устройств
 mapfile -t lvm_parts < <(lsblk -rpno NAME | grep '/dev/mapper/')
 
 if [ ${#lvm_parts[@]} -eq 0 ]; then
-    echo "❌ LVM тома не найдены через /dev/mapper/."
+    echo "❌ LVM тома не найдены через /dev/mapper/.">&2
     exit 1
 fi
 
