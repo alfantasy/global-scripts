@@ -67,6 +67,22 @@ resolution_daemon() {
     echo "Запуск демона мониторинга разрешения..."
     LAST_STATE=$(xrandr --query | grep " connected")
     
+    # Определяем активного пользователя
+    XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read session; do
+        user=$(loginctl show-session $session -p User --value)
+        seat=$(loginctl show-session $session -p Seat --value)
+        active=$(loginctl show-session $session -p Active --value)
+        if [[ "$active" == "yes" ]]; then
+            echo "$user"
+            break
+        fi
+    done)
+
+    export DISPLAY=:0
+    export XAUTHORITY="/home/$XUSER/.Xauthority"    
+
+    echo "Используется пользователь: $XUSER"
+
     while true; do
         CURRENT_STATE=$(xrandr --query | grep " connected")
         
@@ -105,6 +121,18 @@ apply_resolution() {
 create_systemd_service() {
     SERVICE_FILE="/etc/systemd/system/resolution-fix.service"
     
+    # Находим активного пользователя X-сессии
+    XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read session; do
+        user=$(loginctl show-session $session -p User --value)
+        active=$(loginctl show-session $session -p Active --value)
+        if [[ "$active" == "yes" ]]; then
+            echo "$user"
+            break
+        fi
+    done)
+
+    XAUTHORITY="/home/$XUSER/.Xauthority"
+
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Fix display resolution and monitor configuration
@@ -114,7 +142,7 @@ Requires=display-manager.service
 [Service]
 Type=simple
 Environment="DISPLAY=:0"
-Environment="XAUTHORITY=/home/$USER/.Xauthority"  # Для LightDM
+Environment="XAUTHORITY=$XAUTHORITY"
 User=root
 ExecStartPre=/bin/sleep 10  # Даем время загрузиться X-серверу
 ExecStart=/usr/local/bin/fix-resolution --daemon
