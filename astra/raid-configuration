@@ -6,6 +6,44 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+get_parent_disk_from_lvm() {
+    local lv_mapper_path="$1"
+    local lv_path
+    local vg_name
+    local pv
+    local disk
+
+    echo "[i] Поиск VG для LVM тома: $lv_mapper_path">&2
+
+    # Преобразуем /dev/mapper/VG235-lv_home → /dev/VG235/lv_home
+    lv_path=$(echo "$lv_mapper_path" | sed 's|^/dev/mapper/|/dev/|' | sed 's|-|/|')
+
+    vg_name=$(lvdisplay "$lv_path" 2>/dev/null | awk -F ' ' '/VG Name/ {print $3}')
+    if [[ -z "$vg_name" ]]; then
+        echo "❌ VG не найден для $lv_path">&2
+        return 1
+    fi
+
+    echo "[i] Обнаружена VG: $vg_name">&2
+
+    pv=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$vg_name" '$2 == vg {print $1}' | head -n1)
+    if [[ -z "$pv" ]]; then
+        echo "❌ Physical volume не найден для VG: $vg_name">&2
+        return 1
+    fi
+
+    echo "[i] Физический раздел: $pv">&2
+
+    disk=$(lsblk -no PKNAME "$pv" | head -n1 2>/dev/null)
+
+    if [[ -z "$disk" ]]; then
+        echo "❌ Не удалось определить родительский диск.">&2
+        return 1
+    fi
+
+    echo "/dev/$disk"
+}
+
 global_configuration() {
     read -t 10 -p "Введите имя установленного LVM Volume Group: " MANUAL_VG_ID
 
@@ -52,6 +90,30 @@ step_one() {
     fi
 
     echo -e "\033[1;37mПроверка наличия более двух дисков...\033[0m"
+    if [ $(lsblk -dno NAME | wc -l) -le 2 ]; then
+        echo -e "\033[1;37mНедостаточно дисков для создания RAID массива. Требуется как минимум три диска.\033[0m"
+        exit 1
+    else
+        echo -e "\033[1;37mДостаточно дисков для создания RAID массива.\033[0m"
+    fi
+
+    echo -e "\033[1;37mПоиск LVM...\033[0m"
+    mapfile -t lvm_parts < <(lsblk -rpno NAME | grep '/dev/mapper/')
+
+    if [ ${#lvm_parts[@]} -eq 0 ]; then
+        echo -e "\033[1;37mLVM тома не найдены через /dev/mapper/.\033[0m"
+        exit 1
+    fi
+
+    lvm_part="${lvm_parts[0]}"
+    echo -e "\033[1;37mНайден LVM: $lvm_part\033[0m"
+    parent_disk=$(get_parent_disk_from_lvm "$lvm_part")
+    echo -e "\033[1;37mНайден основной диск: $parent_disk\033[0m"
+    
+    mapfile -t parent_parts < <(lsblk -ln -o PATH,TYPE "$parent_disk" | awk '$2 == "part" {print $1}')
+    for part in "${parent_parts[@]}"; do
+        echo "  - $part"
+    done
 }
 
 case "$1" in
