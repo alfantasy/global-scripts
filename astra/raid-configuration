@@ -30,6 +30,7 @@ global_configuration() {
 step_one() {
     echo -e "\033[1;37mДоперезагрузочная реализация\033[0m"
     global_configuration
+    echo -e "\033[1;37mПроверка доступности интернет-соединения..\033[0m"
     check_internet=$(ping -c 1 google.com >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$check_internet" == "1" ]; then
@@ -38,6 +39,19 @@ step_one() {
         echo -e "\033[1;37mИнтернет недоступен\033[0m"
         exit 1
     fi
+
+    echo -e "\033[1;37mУстановка специального пакета для работы с RAID-массивами...\033[0m"
+    install_mdadm=$(apt-get install -y mdadm >/dev/null 2>&1 && echo "1" || echo "0")
+
+    if [ "$install_mdadm" == "1" ]; then
+        echo -e "\033[1;37mПакет mdadm установлен\033[0m"
+    else
+        echo -e "\033[1;37mПакет mdadm не установлен\033[0m"
+        echo -e "\033[1;37mПроверьте интернет-соединение или /etc/apt/sources.list и повторите попытку\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mПроверка наличия более двух дисков...\033[0m"
 }
 
 case "$1" in
