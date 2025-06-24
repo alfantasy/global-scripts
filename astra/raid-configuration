@@ -27,6 +27,19 @@ global_configuration() {
     fi
 }
 
+step_one() {
+    echo -e "\033[1;37mДоперезагрузочная реализация\033[0m"
+    global_configuration
+    check_internet=$(ping -c 1 google.com >/dev/null 2>&1 && echo "1" || echo "0")
+
+    if [ "$check_internet" == "1" ]; then
+        echo -e "\033[1;37mИнтернет доступен\033[0m"
+    else
+        echo -e "\033[1;37mИнтернет недоступен\033[0m"
+        exit 1
+    fi
+}
+
 case "$1" in
     --start)
         echo "Выберите этап конфигурации:"
@@ -37,7 +50,7 @@ case "$1" in
 
         case "$STEP" in
             1)
-            global_configuration
+            step_one
             ;;
             2)
             global_configuration
@@ -61,7 +74,7 @@ case "$1" in
         exit 0
         ;;
     *)
-        echo -e "\033[1;37mНеверная опция: $1\033[0m" 1>&2
+        echo -e "\033[1;37mНеверная опция: $1. Используйте $0 --help\033[0m" 1>&2
         exit 1
         ;;
 esac
