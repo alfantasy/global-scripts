@@ -26,7 +26,7 @@ get_parent_disk_from_lvm() {
 
     echo "[i] Физический раздел: $pv">&2
 
-    disk=$(lsblk -no PKNAME "$pv" 2>/dev/null)
+    disk=$(lsblk -no PKNAME "$pv" | head -n1 2>/dev/null)
 
     if [[ -z "$disk" ]]; then
         echo "❌ Не удалось определить родительский диск.">&2
@@ -55,3 +55,9 @@ if [[ -n "$parent_disk" ]]; then
 else
     echo "❌ Не удалось определить диск."
 fi
+
+mapfile -t parent_parts < <(lsblk -ln -o PATH,TYPE "$parent_disk" | awk '$2 == "part" {print $1}')
+
+for part in "${parent_parts[@]}"; do
+    echo "🔹 Раздел: $part"
+done
