@@ -33,9 +33,12 @@ get_parent_disk_from_lvm() {
         disk=$(realpath "/sys/class/block/$(basename "$pv")/.." | xargs basename)
     fi
 
-    [[ -z "$disk" ]] && echo "❌ Не удалось определить родительский диск." && return 1
+    if [[ -z "$disk" ]]; then
+        echo "❌ Не удалось определить родительский диск."
+        return 1
+    fi
 
-    echo "/dev/$disk"
+    echo "[i] Родительский диск: /dev/$disk"
 }
 
 # Поиск LVM-устройств
