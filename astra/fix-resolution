@@ -150,11 +150,10 @@ apply_resolution() {
         echo "Сервис пытается применить разрешение $RESOLUTION@$RATE для $MONITOR..."
         if ! xrandr | grep -q "$MODE_NAME"; then
             echo "Добавляем режим: $MODE_NAME"
-            xrandr --newmode $MODELINE_STR
-            xrandr --addmode "$MONITOR" "$MODE_NAME"
+            xrandr --newmode $MODELINE_STR 2>/dev/null
+            xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null
         fi
-        xrandr --addmode "$MONITOR" "${RESOLUTION}_${RATE}.00" 2>/dev/null
-        xrandr --output "$MONITOR" --mode "${RESOLUTION}_${RATE}.00" --rate "$RATE"
+        xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE"
     done
 }
 
