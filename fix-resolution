@@ -132,7 +132,7 @@ Type=simple
 Environment="DISPLAY=$DISPLAY"
 Environment="XAUTHORITY=$XAUTHORITY"
 User=root
-ExecStartPre=/bin/sleep 10  # Даем время загрузиться X-серверу
+ExecStartPre=/bin/sleep 10
 ExecStart=/usr/local/bin/fix-resolution --daemon
 Restart=always
 RestartSec=5
