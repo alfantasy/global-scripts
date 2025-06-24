@@ -27,9 +27,6 @@ get_parent_disk_from_lvm() {
     echo "[i] Физический раздел: $pv">&2
 
     disk=$(lsblk -no PKNAME "$pv" 2>/dev/null)
-    if [[ -z "$disk" ]]; then
-        disk=$(realpath "/sys/class/block/$(basename "$pv")/.." | xargs basename)
-    fi
 
     if [[ -z "$disk" ]]; then
         echo "❌ Не удалось определить родительский диск.">&2
