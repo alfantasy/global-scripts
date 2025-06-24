@@ -54,6 +54,7 @@ parent_disk=$(get_parent_disk_from_lvm "$lvm_part")
 
 if [[ -n "$parent_disk" ]]; then
     echo "✅ Родительский диск: $parent_disk"
+    echo "Идем дальше?"
 else
     echo "❌ Не удалось определить диск."
 fi
