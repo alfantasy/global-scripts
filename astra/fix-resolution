@@ -151,6 +151,12 @@ EOF
 }
 
 case "$1" in
+    --start)
+        generate_xorg_config
+        apply_resolution
+        echo "Конфигурация применена. Для постоянной работы запустите:"
+        echo "  $0 --install"
+        ;;
     --daemon)
         resolution_daemon
         ;;
@@ -160,10 +166,13 @@ case "$1" in
         create_systemd_service
         echo "Установка завершена. Сервис запущен и добавлен в автозагрузку."
         ;;
+    --help)
+        echo "Использование fix-resolution:"
+        echo "  $0 --start - применение конфигурации без активации демона в системе"
+        echo "  $0 --daemon - базовая регистрация демона в системе"
+        echo "  $0 --install - полная инсталляция демона в systemd в записью в автозагрузку"
+        ;;
     *)
-        generate_xorg_config
-        apply_resolution
-        echo "Конфигурация применена. Для постоянной работы запустите:"
-        echo "  $0 --install"
+        echo "Неизвестная опция: $1, используйте fix-resolution --help"
         ;;
 esac
