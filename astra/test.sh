@@ -12,7 +12,7 @@ get_parent_disk_from_lvm() {
 
     echo "[i] Преобразованный путь: $lv_path"
 
-    vg_name=$(lvdisplay "$lv_path" 2>/dev/null | awk -F ': ' '/VG Name/ {print $2}')
+    vg_name=$(lvdisplay "$lv_path" 2>/dev/null | awk -F ' ' '/VG Name/ {print $3}')
     if [[ -z "$vg_name" ]]; then
         echo "❌ VG не найден для $lv_path"
         return 1
