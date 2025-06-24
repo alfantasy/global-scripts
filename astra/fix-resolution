@@ -109,6 +109,12 @@ resolution_daemon() {
     echo "Реализация конфигурации под текущего запущенного пользователя с сессией Xorg"
 
     while true; do
+        load_config
+        WIDTH=$(echo "$RESOLUTION" | cut -d"x" -f1)
+        HEIGHT=$(echo "$RESOLUTION" | cut -d"x" -f2)
+        MODELINE=$(cvt "$WIDTH" "$HEIGHT" "$RATE" | grep Modeline)
+        MODE_NAME=$(echo "$MODELINE" | awk '{print $2}')
+
         CURRENT_STATE=$(xrandr --query | grep " connected")
         
         if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
@@ -121,10 +127,14 @@ resolution_daemon() {
         
         for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
             CURRENT_MODE=$(xrandr --query | grep -A1 "^$MONITOR" | grep -oP '\d+x\d+' | head -1)
-            if [ "$CURRENT_MODE" != "1920x1080" ]; then
+            if [ "$CURRENT_MODE" != "$RESOLUTION" ]; then
                 echo "Исправляем разрешение для $MONITOR..."
-                xrandr --output "$MONITOR" --mode 1920x1080 --rate 60
-                echo "Разрешение для $MONITOR установлено в 1920x1080."
+                if ! xrandr | grep -q "$MODE_NAME"; then
+                    xrandr --newmode ${MODELINE#Modeline } 2>/dev/null
+                    xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null
+                fi
+                xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE"
+                echo "Разрешение для $MONITOR установлено в $RESOLUTION."
             fi
         done
         
