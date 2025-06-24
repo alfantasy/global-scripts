@@ -1,61 +1,34 @@
-#!/bin/bash
+# Получаем все блоки с типом lvm
+mapfile -t lvm_parts < <(lsblk -rpno NAME,TYPE | awk '$2=="lvm" { print $1 }')
 
-# Получение всех устройств с размерами в мегабайтах
-mapfile -t disks < <(lsblk -bno NAME,SIZE,TYPE | awk '$3=="disk" { print $1, $2 }')
-
-# Ищем первый диск с LVM
-for entry in "${disks[@]}"; do
-    disk_name=$(echo "$entry" | awk '{print $1}')
-    disk_size=$(echo "$entry" | awk '{print $2}')
-    full_path="/dev/$disk_name"
-
-    # Проверка, используется ли диск как физ. том LVM
-    if pvs "$full_path" &>/dev/null; then
-        LVM_DISK="$full_path"
-        LVM_SIZE="$disk_size"
-        break
-    fi
-done
-
-# Проверка, что нашли диск с LVM
-if [ -z "$LVM_DISK" ]; then
-    echo "Ошибка: не найден диск с LVM."
+if [ ${#lvm_parts[@]} -eq 0 ]; then
+    echo "❌ LVM тома не найдены."
     exit 1
 fi
 
-echo "Найден диск с LVM: $LVM_DISK (размер: $LVM_SIZE байт)"
+# Берем первый раздел с LVM
+lvm_part="${lvm_parts[0]}"
 
-# Поиск второго диска с тем же размером, но без LVM
-for entry in "${disks[@]}"; do
-    disk_name=$(echo "$entry" | awk '{print $1}')
-    disk_size=$(echo "$entry" | awk '{print $2}')
-    full_path="/dev/$disk_name"
+# Узнаем родительский диск (например, /dev/sda)
+source_disk=$(lsblk -no PKNAME "$lvm_part")
 
-    # Пропускаем LVM-диск
-    if [ "$full_path" == "$LVM_DISK" ]; then
-        continue
-    fi
+# Узнаем размер исходного диска
+source_size=$(lsblk -bno SIZE "/dev/$source_disk")
 
-    # Пропускаем диск, если он участвует в LVM
-    if pvs "$full_path" &>/dev/null; then
-        continue
-    fi
+echo "✅ Найден диск с LVM: /dev/$source_disk (${source_size} байт)"
 
-    # Сравниваем размер
-    if [ "$disk_size" -eq "$LVM_SIZE" ]; then
-        MATCHING_DISK="$full_path"
+# Теперь ищем другой диск такой же ёмкости (и с TYPE="disk")
+target_disk=""
+while read -r name size; do
+    if [[ "$name" != "$source_disk" && "$size" == "$source_size" ]]; then
+        target_disk="$name"
         break
     fi
-done
+done < <(lsblk -bno NAME,SIZE,TYPE | awk '$3=="disk" { print $1, $2 }')
 
-# Проверка, что второй диск найден
-if [ -z "$MATCHING_DISK" ]; then
-    echo "Ошибка: не найден подходящий второй диск."
+if [[ -n "$target_disk" ]]; then
+    echo "✅ Подходящий целевой диск найден: /dev/$target_disk"
+else
+    echo "❌ Целевой диск такого же размера не найден."
     exit 1
 fi
-
-echo "Найден второй диск с тем же размером: $MATCHING_DISK"
-
-# Можно экспортировать переменные или использовать их дальше
-export LVM_DISK
-export MATCHING_DISK
