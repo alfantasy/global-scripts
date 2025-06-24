@@ -231,6 +231,12 @@ case "$1" in
                 echo "Использование:"
                 echo "  $0 --config set ключ значение"
                 echo "  $0 --config show"
+                echo "  "
+                echo " Основные переменные: "
+                echo "  - RESOLUTION=<ширина>x<высота>"
+                echo "  - RATE=<частота>"
+                echo "  "
+                echo "Пример: $0 --config set RESOLUTION 1920x1080"
                 ;;
         esac
         exit 0
