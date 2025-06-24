@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# Основной скрипт для генерации конфига Xorg
+generate_xorg_config() {
+    CONFIG_FILE="/etc/X11/xorg.conf.d/10-fixed-resolution.conf"
+    MONITORS=$(xrandr --query | grep " connected" | cut -d" " -f1)
+
+    cat > "$CONFIG_FILE" <<EOF
+Section "ServerFlags"
+    Option "AutoAddDevices" "false"
+    Option "AutoEnableDevices" "false"
+EndSection
+
+Section "Device"
+    Identifier  "GPU"
+    Driver      "modesetting"
+    Option      "ModeDebug" "true"
+EOF
+
+    # Добавляем специфичные опции для NVIDIA/AMD
+    if lspci | grep -qi nvidia; then
+        echo '    Option "CustomEDID" "none"' >> "$CONFIG_FILE"
+        echo '    Option "ModeValidation" "NoEdidModes"' >> "$CONFIG_FILE"
+    elif lspci | grep -qi amd; then
+        echo '    Option "VariableRefresh" "false"' >> "$CONFIG_FILE"
+    fi
+
+    echo 'EndSection' >> "$CONFIG_FILE"
+
+    for MONITOR in $MONITORS; do
+        cat >> "$CONFIG_FILE" <<EOF
+
+Section "Monitor"
+    Identifier  "$MONITOR"
+    Option      "PreferredMode" "1920x1080"
+    Option      "IgnoreEDID" "true"
+    Option      "UseEDID" "false"
+    Option      "DPMS" "false"
+    Modeline    "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+EndSection
+EOF
+    done
+
+    cat >> "$CONFIG_FILE" <<EOF
+
+Section "Screen"
+    Identifier  "DefaultScreen"
+    Device      "GPU"
+    DefaultDepth 24
+EOF
+
+    for MONITOR in $MONITORS; do
+        echo "    Monitor     \"$MONITOR\"" >> "$CONFIG_FILE"
+    done
+
+    cat >> "$CONFIG_FILE" <<EOF
+    SubSection "Display"
+        Depth    24
+        Modes    "1920x1080_60.00"
+    EndSubSection
+EndSection
+EOF
+}
+
+# Демон для мониторинга изменений
+resolution_daemon() {
+    echo "Запуск демона мониторинга разрешения..."
+    LAST_STATE=$(xrandr --query | grep " connected")
+    
+    while true; do
+        CURRENT_STATE=$(xrandr --query | grep " connected")
+        
+        # Проверяем изменения в подключении мониторов
+        if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
+            echo "Обнаружено изменение конфигурации мониторов"
+            generate_xorg_config
+            apply_resolution
+            LAST_STATE="$CURRENT_STATE"
+        fi
+        
+        # Принудительно устанавливаем разрешение каждые 10 секунд
+        for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
+            CURRENT_MODE=$(xrandr --query | grep -A1 "^$MONITOR" | grep -oP '\d+x\d+' | head -1)
+            if [ "$CURRENT_MODE" != "1920x1080" ]; then
+                echo "Исправляем разрешение для $MONITOR"
+                xrandr --output "$MONITOR" --mode 1920x1080 --rate 60
+            fi
+        done
+        
+        sleep 10
+    done
+}
+
+# Применение разрешения
+apply_resolution() {
+    for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
+        echo "Применяем 1920x1080 для $MONITOR"
+        xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+        xrandr --addmode "$MONITOR" "1920x1080_60.00"
+        xrandr --output "$MONITOR" --mode "1920x1080_60.00" --rate 60
+    done
+}
+
+# Создаем systemd сервис
+create_systemd_service() {
+    SERVICE_FILE="/etc/systemd/system/resolution-fix.service"
+    
+    cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Fix display resolution and monitor configuration
+After=display-manager.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c '$(realpath "$0") --daemon'
+Restart=always
+RestartSec=10
+Environment="DISPLAY=:0"
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable resolution-fix.service
+    systemctl start resolution-fix.service
+}
+
+# Основная логика
+case "$1" in
+    --daemon)
+        resolution_daemon
+        ;;
+    --install)
+        generate_xorg_config
+        apply_resolution
+        create_systemd_service
+        echo "Установка завершена. Сервис запущен и добавлен в автозагрузку."
+        ;;
+    *)
+        generate_xorg_config
+        apply_resolution
+        echo "Конфигурация применена. Для постоянной работы запустите:"
+        echo "  $0 --install"
+        ;;
+esac
