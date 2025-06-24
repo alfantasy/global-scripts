@@ -6,18 +6,64 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-read -t 10 -p "Введите имя установленного LVM Volume Group: " MANUAL_VG_ID
+global_configuration() {
+    read -t 10 -p "Введите имя установленного LVM Volume Group: " MANUAL_VG_ID
 
-if [ -n "$MANUAL_VG_ID" ]; then
-    MAIN_LVM_VGID="$MANUAL_VG_ID"
-    echo -e "\033[1;37mИспользуется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
-else
-    MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
-    if [ -z "$MAIN_LVM_VGID" ]; then
-        echo -e "\033[1;37mНе удалось определить главный LVM Volume Group.\033[0m" 1>&2
-        exit 1
+    if [ -n "$MANUAL_VG_ID" ]; then
+        if ! echo "$MANUAL_VG_ID" | grep -qP 'VG\K[0-9]+(?=-lv_)'; then
+            echo -e "\033[1;37mНеверное имя главного LVM Volume Group: $MANUAL_VG_ID\033[0m" 1>&2
+            exit 1
+        fi
+        MAIN_LVM_VGID="$MANUAL_VG_ID"
+        echo -e "\033[1;37mИспользуется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
     else
-        echo -e "\033[1;37mИспользуется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
-    fi    
-fi
+        MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
+        if [ -z "$MAIN_LVM_VGID" ]; then
+            echo -e "\033[1;37mНе удалось определить главный LVM Volume Group.\033[0m" 1>&2
+            exit 1
+        else
+            echo -e "\033[1;37mИспользуется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+        fi    
+    fi
+}
+
+case "$1" in
+    --start)
+        echo "Выберите этап конфигурации:"
+        echo "1. Доперезагрузочная реализация"
+        echo "2. Послезагрузочная реализация"
+
+        read -p "Введите номер этапа: " STEP
+
+        case "$STEP" in
+            1)
+            global_configuration
+            ;;
+            2)
+            global_configuration
+            echo -e "\033[1;37mПослезагрузочная реализация\033[0m"
+            ;;
+            *)
+            echo -e "\033[1;37mНеверный номер этапа: $STEP\033[0m" 1>&2
+            exit 1
+            ;;
+        esac
+        ;;
+    --help)
+        echo "Использование raid-configuration:"
+        echo "  --start - Запустить процесс полностью"
+        echo "  --help - Показать справку"
+        echo "  --get-vg - Получить главный LVM Volume Group"
+        ;;
+    --get-vg)
+        MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
+        echo -e "\033[1;37mГлавный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+        exit 0
+        ;;
+    *)
+        echo -e "\033[1;37mНеверная опция: $1\033[0m" 1>&2
+        exit 1
+        ;;
+esac
+
 
