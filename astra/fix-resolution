@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Находим активного пользователя X-сессии
 XUSER=$(loginctl list-sessions | awk '$1 ~ /^[0-9]+$/ { print $1 }' | while read session; do
     uid=$(loginctl show-session "$session" -p User --value)
     active=$(loginctl show-session "$session" -p Active --value)
@@ -14,7 +13,6 @@ export XUSER
 export DISPLAY=:0
 export XAUTHORITY="/home/$XUSER/.Xauthority"    
 
-# Основной скрипт для генерации конфига Xorg
 generate_xorg_config() {
     echo "Генерация конфигурации Xorg..."
     CONFIG_FILE="/etc/X11/xorg.conf.d/10-fixed-resolution.conf"
@@ -33,7 +31,6 @@ Section "Device"
 EOF
 
     echo "Основные флаги установлены."
-    # Добавляем специфичные опции для NVIDIA/AMD
     if lspci | grep -qi nvidia; then
         echo '    Option "CustomEDID" "none"' >> "$CONFIG_FILE"
         echo '    Option "ModeValidation" "NoEdidModes"' >> "$CONFIG_FILE"
@@ -81,26 +78,24 @@ EOF
     echo "Конфигурация Xorg сгенерирована."
 }
 
-# Демон для мониторинга изменений
 resolution_daemon() {
     echo "Запуск демона мониторинга разрешения..."
     LAST_STATE=$(xrandr --query | grep " connected")
 
-    echo "Используется пользователь: $XUSER"
+    echo "Найден пользователь с активной сессией: $XUSER"
+    echo "Реализация конфигурации под текущего запущенного пользователя с сессией Xorg"
 
     while true; do
         CURRENT_STATE=$(xrandr --query | grep " connected")
         
-        # Проверяем изменения в подключении мониторов
         if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
-            echo "Обнаружено изменение конфигурации мониторов"
+            echo "Обнаружено изменение конфигурации мониторов! Применяем конфигурацию..."
             generate_xorg_config
             apply_resolution
             LAST_STATE="$CURRENT_STATE"
             echo "Конфигурация применена."
         fi
         
-        # Принудительно устанавливаем разрешение каждые 10 секунд
         for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
             CURRENT_MODE=$(xrandr --query | grep -A1 "^$MONITOR" | grep -oP '\d+x\d+' | head -1)
             if [ "$CURRENT_MODE" != "1920x1080" ]; then
@@ -114,10 +109,9 @@ resolution_daemon() {
     done
 }
 
-# Применение разрешения
 apply_resolution() {
     for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
-        echo "Пытается применить разрешение 1920x1080 для $MONITOR..."
+        echo "Сервис пытается применить разрешение 1920x1080 для $MONITOR..."
         if ! xrandr | grep -q "1920x1080"; then
             xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
         fi
@@ -126,8 +120,8 @@ apply_resolution() {
     done
 }
 
-# Создаем systemd сервис
 create_systemd_service() {
+    echo "Регистрация systemd сервиса..."
     SERVICE_FILE="/etc/systemd/system/resolution-fix.service"
 
     cat > "$SERVICE_FILE" <<EOF
@@ -150,12 +144,12 @@ RestartSec=5
 WantedBy=graphical.target
 EOF
 
+    echo "Регистрация завершена."
     systemctl daemon-reload
     systemctl enable resolution-fix.service
     systemctl start resolution-fix.service
 }
 
-# Основная логика
 case "$1" in
     --daemon)
         resolution_daemon
