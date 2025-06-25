@@ -161,12 +161,17 @@ apply_resolution() {
     # Выставляем разрешение, если что-то изменилось в течении работы демона
     for MONITOR in $(xrandr --query | grep " connected" | cut -d" " -f1); do
         echo "Сервис пытается применить разрешение $RESOLUTION@$RATE для $MONITOR..."
-        if ! xrandr | grep -q "$MODE_NAME"; then
-            echo "Добавляем режим: $MODE_NAME"
-            xrandr --newmode $MODELINE_STR 2>/dev/null
-            xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null
-        fi
-        xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE"
+        echo "Добавляем и применяем режим $MODE_NAME на $MONITOR..."
+
+        # Принудительно добавляем новый режим
+        xrandr --newmode $MODELINE_STR 2>/dev/null || true
+        xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null || true
+
+        # Применяем режим независимо от наличия в списке EDID
+        xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE" || {
+            echo "⚠️ Не удалось применить режим обычным способом. Пробуем через --scale-from..."
+            xrandr --output "$MONITOR" --scale-from "$RESOLUTION"
+        }
     done
 }
 
