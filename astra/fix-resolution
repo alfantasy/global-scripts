@@ -169,7 +169,7 @@ apply_resolution() {
 
         # Применяем режим независимо от наличия в списке EDID
         xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE" || {
-            echo "⚠️ Не удалось применить режим обычным способом. Пробуем через --scale-from..."
+            echo "Не удалось применить режим обычным способом. Пробуем через --scale-from..."
             xrandr --output "$MONITOR" --scale-from "$RESOLUTION"
         }
     done
