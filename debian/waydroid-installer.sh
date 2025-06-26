@@ -26,18 +26,8 @@ install_waydroid() {
 
     if [ "$STEP_INSTALL_REQUIRED" == "1" ]; then
         echo -e "\033[94mДобавляется официальный репозиторий Waydroid...\033[0m"
-        if $(curl -s https://repo.waydro.id); then
-            if $(wget -O waydroid-add-repository.sh https://repo.waydro.id); then
-                if $(bash waydroid-add-repository.sh); then
-                    echo -e "\033[94mРепозиторий Waydroid добавлен.\033[0m"
-                else
-                    echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
-                    exit 1
-                fi
-            else
-                echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
-                exit 1
-            fi
+        if $(curl -s https://repo.waydro.id | sudo bash); then
+            echo -e "\033[94mРепозиторий Waydroid добавлен.\033[0m"
             STEP_ADD_REP_WAYDROID="1"
         else
             echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
