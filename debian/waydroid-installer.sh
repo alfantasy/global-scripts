@@ -15,8 +15,8 @@ install_waydroid() {
     fi
 
     if [ "$STEP_UPDATE_APT" == "1" ]; then
-        if $(apt install curl ca-certificates -y >/dev/null 2>&1); then
-            echo -e "\033[94mУстановлены необходимые пакеты для продолжения: \033[97mcurl ca-certificates.\033[0m"
+        if $(apt install wget curl ca-certificates -y >/dev/null 2>&1); then
+            echo -e "\033[94mУстановлены необходимые пакеты для продолжения: \033[97m wget curl ca-certificates.\033[0m"
             STEP_INSTALL_REQUIRED="1"
         else
             echo -e "\033[91mПакеты не установлены. Проверьте /etc/apt/sources.list и Ваше интернет-соединение.\033[0m"
@@ -27,7 +27,17 @@ install_waydroid() {
     if [ "$STEP_INSTALL_REQUIRED" == "1" ]; then
         echo -e "\033[94mДобавляется официальный репозиторий Waydroid...\033[0m"
         if $(curl -s https://repo.waydro.id); then
-            echo -e "\033[94mРепозиторий Waydroid добавлен.\033[0m"
+            if $(wget -O waydroid-add-repository.sh https://repo.waydro.id); then
+                if $(bash waydroid-add-repository.sh); then
+                    echo -e "\033[94mРепозиторий Waydroid добавлен.\033[0m"
+                else
+                    echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
+                    exit 1
+                fi
+            else
+                echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
+                exit 1
+            fi
             STEP_ADD_REP_WAYDROID="1"
         else
             echo -e "\033[91mРепозиторий Waydroid не добавлен. Проверьте Ваше интернет-соединение.\033[0m"
