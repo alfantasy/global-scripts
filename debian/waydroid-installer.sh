@@ -13,7 +13,7 @@ install_waydroid() {
         echo -e "\033[91mНе удалось установить необходимые пакеты. Проверьте /etc/apt/sources.list и Ваше интернет-соединение.\033[0m"
         exit 1
     fi
-    echo -e "\033[94mУстановлены необходимые пакеты: wget, curl, ca-certificates.\033[0m"
+    echo -e "\033[92mУстановлены необходимые пакеты: \033[0mwget, curl, ca-certificates."
 
     echo -e "\033[94mДобавление официального репозитория Waydroid...\033[0m"
     
@@ -41,12 +41,13 @@ install_waydroid() {
     rm -f "$temp_script"
     echo -e "\033[94mРепозиторий Waydroid успешно добавлен.\033[0m"
 
-    echo -e "\033[94mУстановка Waydroid...\033[0m"
+    echo -e "\033[94mУстановка основного пакета Waydroid...\033[0m"
     if ! apt install -y waydroid; then
-        echo -e "\033[91mНе удалось установить Waydroid.\033[0m"
+        echo -e "\033[91mНе удалось установить пакет Waydroid.\033[0m"
         exit 1
     fi
-    echo -e "\033[94mWaydroid успешно установлен.\033[0m"
+    echo -e "\033[92mWaydroid успешно установлен.\033[0m"
+    echo -e "\033[94mДля работы с Waydroid, запустите его через меню приложений, найдя его в списке.\033[0m"
 }
 
 # Проверка прав суперпользователя
