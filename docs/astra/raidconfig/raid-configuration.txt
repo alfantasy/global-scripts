@@ -1,0 +1,3 @@
+RAID Configuration - мультискрипт для автоматизации настройки RAID-массива первого уровня с LVM-томом.
+Запуск:
+raid-configuration --auto
