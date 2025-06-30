@@ -488,12 +488,15 @@ case "$1" in
         ;;
     --help)
         echo "Использование raid-configuration:"
-        echo "  -auto - Автоматический процесс конфигурации"
+        echo "  --auto - Автоматический процесс конфигурации"
         echo "  --start - Запустить процесс полностью"
         echo "  --step [1/2] - Запустить процесс конкретного этапа"
         echo "  --help - Показать справку"
         echo "  --get-vg - Получить главный LVM Volume Group"
         echo "  --daemon-env - Автозапуск второго этапа конфигурации"
+        ;;
+    --auto)
+        step_one
         ;;
     --step)
         case "$2" in
