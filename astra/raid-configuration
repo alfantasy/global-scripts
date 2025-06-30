@@ -152,31 +152,19 @@ step_one() {
     sfdisk -d "$parent_disk" | sfdisk "$second_disk"
     echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
 
-    # Получаем имя VG (уже определено ранее в global_configuration)
-    vg_name="$MAIN_LVM_VGID"
+    echo -e "\033[1;37mПоиск физического раздела, где размещён VG $MAIN_LVM_VGID...\033[0m"
+    pv_partition=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$MAIN_LVM_VGID" '$2 == vg {print $1}')
 
-    echo -e "\033[1;37mОпределение физического раздела, на котором размещён LVM...\033[0m"
-    pv_device=$(pvs --noheadings --separator '|' -o pv_name,vg_name \
-    | awk -F'|' -v vg="$vg_name" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == vg) print $1;}' | head -n1)
-
-    if [ -z "$pv_device" ]; then
-        echo -e "\033[1;37m❌ Не удалось найти физический раздел для VG $vg_name\033[0m"
+    if [[ -z "$pv_partition" ]]; then
+        echo -e "\033[1;31m❌ Не удалось найти физический раздел для $MAIN_LVM_VGID\033[0m"
         exit 1
+    else
+        echo -e "\033[1;37m✅ Найден физический раздел: $pv_partition\033[0m"
     fi
 
-    echo -e "\033[1;37mФизический раздел с LVM: $pv_device\033[0m"
-
-    # Извлекаем номер раздела
-    part_number=$(echo "$pv_device" | grep -o '[0-9]\+$')
-
-    if [ -z "$part_number" ]; then
-        echo -e "\033[1;37m❌ Не удалось извлечь номер раздела из $pv_device\033[0m"
-        exit 1
-    fi
-
-    echo -e "\033[1;37mНомер раздела с LVM: $part_number\033[0m"
-
-
+    # Сохраняем номер раздела, например: sda3 → 3
+    part_number=$(echo "$pv_partition" | grep -oP '\d+$')
+    echo -e "\033[1;37mНомер раздела: $part_number\033[0m"
 }
 
 case "$1" in
