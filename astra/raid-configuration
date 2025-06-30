@@ -259,7 +259,7 @@ step_two() {
 
     mdadm_output=$(mdadm --detail /dev/md0 2>/dev/null)
 
-    state=$(echo "$mdadm_output" | awk -F': ' '/^State/ {print $2}')
+    state=$(echo "$mdadm_output" | awk -F': ' '/State/ {print $2}')
     active=$(echo "$mdadm_output" | awk -F': ' '/Active Devices/ {print $2}' | tr -d ' ')
     working=$(echo "$mdadm_output" | awk -F': ' '/Working Devices/ {print $2}' | tr -d ' ')
     failed=$(echo "$mdadm_output" | awk -F': ' '/Failed Devices/ {print $2}' | tr -d ' ')
