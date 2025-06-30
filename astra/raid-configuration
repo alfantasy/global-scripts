@@ -1,8 +1,8 @@
 #!/bin/bash
 
 if [ "$(id -u)" != "0" ]; then
-    echo -e "\033[1;37mСкрипт должен иметь права суперпользователя (root).\033[0m" 1>&2
-    echo -e "\033[1;34mЗапустите скрипт через sudo или зайдите под суперпользователя и повторите попытку.\033[0m" 1>&2
+    echo -e "\033[1;37m[i] Скрипт должен иметь права суперпользователя (root).\033[0m" 1>&2
+    echo -e "\033[1;34m[i] Запустите скрипт через sudo или зайдите под суперпользователя и повторите попытку.\033[0m" 1>&2
     exit 1
 fi
 
@@ -18,10 +18,10 @@ log() {
 }
 
 service_registry() {
-    log -e "\033[1;37mРегистрация сервиса для постреализации...\033[0m"
+    log -e "\033[1;37m[i] Регистрация сервиса для постреализации...\033[0m"
 
     if [ -f "$SERVICE_PATH" ]; then
-        log -e "\033[1;37mСервис уже зарегистрирован.\033[0m"
+        log -e "\033[1;37m[i] Сервис уже зарегистрирован.\033[0m"
         return
     fi
     cat <<EOF > "$SERVICE_PATH"
@@ -51,10 +51,10 @@ EOF
 }
 
 service_unregistry() {
-    log -e "\033[1;37mУдаление сервиса для постреализации...\033[0m"
+    log -e "\033[1;37m[i] Удаление сервиса для постреализации...\033[0m"
 
     if [ ! -f "$SERVICE_PATH" ]; then
-        log -e "\033[1;37mСервис не зарегистрирован.\033[0m"
+        log -e "\033[1;37m[i] Сервис не зарегистрирован.\033[0m"
         return
     fi
 
@@ -72,7 +72,7 @@ get_parent_disk_from_lvm() {
     local pv
     local disk
 
-    echo "[i] Поиск VG для LVM тома: $lv_mapper_path">&2
+    echo -e "\033[1;37m[i] Поиск VG для LVM тома: $lv_mapper_path\033[0m">&2
 
     lv_path=$(echo "$lv_mapper_path" | sed 's|^/dev/mapper/|/dev/|' | sed 's|-|/|')
 
@@ -82,20 +82,20 @@ get_parent_disk_from_lvm() {
         return 1
     fi
 
-    echo "[i] Обнаружена VG: $vg_name">&2
+    echo -e "\033[1;37m[i] Обнаружена VG: $vg_name\033[0m">&2
 
     pv=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$vg_name" '$2 == vg {print $1}' | head -n1)
     if [[ -z "$pv" ]]; then
-        echo "❌ Physical volume не найден для VG: $vg_name">&2
+        echo -e "\033[1;31m❌ Физический том не найден для VG: $vg_name\033[0m">&2
         return 1
     fi
 
-    echo "[i] Физический раздел: $pv">&2
+    echo -e "\033[1;37m[i] Физический раздел: $pv\033[0m">&2
 
     disk=$(lsblk -no PKNAME "$pv" | head -n1 2>/dev/null)
 
     if [[ -z "$disk" ]]; then
-        echo "❌ Не удалось определить родительский диск.">&2
+        echo -e "\033[1;31m❌ Не удалось определить родительский диск.\033[0m">&2
         return 1
     fi
 
@@ -103,11 +103,11 @@ get_parent_disk_from_lvm() {
 }
 
 global_configuration() {
-    read -t 10 -p "Введите имя установленного LVM Volume Group: " MANUAL_VG_ID
+    read -t 10 -p "[r] Введите имя установленного LVM Volume Group: " MANUAL_VG_ID
 
     if [ -n "$MANUAL_VG_ID" ]; then
         if ! echo "$MANUAL_VG_ID" | grep -qP 'VG\K[0-9]+(?=-lv_)'; then
-            echo -e "\033[1;37mНеверное имя главного LVM Volume Group: $MANUAL_VG_ID\033[0m" 1>&2
+            echo -e "\033[1;31m❌ Неверное имя главного LVM Volume Group: $MANUAL_VG_ID\033[0m" 1>&2
             exit 1
         fi
         MAIN_LVM_VGID="$MANUAL_VG_ID"
@@ -115,7 +115,7 @@ global_configuration() {
     else
         MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
         if [ -z "$MAIN_LVM_VGID" ]; then
-            echo -e "\033[1;37mНе удалось определить главный LVM Volume Group.\033[0m" 1>&2
+            echo -e "\033[1;31m❌ Не удалось определить главный LVM Volume Group.\033[0m" 1>&2
             exit 1
         else
             echo -e "\033[1;32m✅ Используется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
@@ -140,46 +140,46 @@ install_mdadm_embedded() {
 }
 
 install_mdadm() {
-    echo -e "\033[1;37mУстановка специального пакета для работы с RAID-массивами...\033[0m"
+    echo -e "\033[1;37m[i] Установка специального пакета для работы с RAID-массивами...\033[0m"
     install_mdadm=$(apt-get install -y mdadm >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$install_mdadm" == "1" ]; then
         echo -e "\033[1;32m✅ Пакет mdadm установлен\033[0m"
     else
-        echo -e "\033[1;37mПакет mdadm не установлен\033[0m"
-        echo -e "\033[1;37mПроверьте интернет-соединение или /etc/apt/sources.list и повторите попытку\033[0m"
+        echo -e "\033[1;31m❌ Пакет mdadm не установлен\033[0m"
+        echo -e "\033[1;31m❌ Проверьте интернет-соединение или /etc/apt/sources.list и повторите попытку\033[0m"
         exit 1
     fi    
 }
 
 step_one() {
-    echo -e "\033[1;37mДоперезагрузочная реализация\033[0m"
+    echo -e "\033[1;37m[i] Доперезагрузочная реализация\033[0m"
     global_configuration
 
-    echo -e "\033[1;37mПроверка доступности интернет-соединения..\033[0m"
+    echo -e "\033[1;37m[i] Проверка доступности интернет-соединения..\033[0m"
     check_internet=$(ping -c 1 google.com >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$check_internet" == "1" ]; then
         echo -e "\033[1;32m✅ Интернет доступен\033[0m"
         install_mdadm
     else
-        echo -e "\033[1;37mИнтернет недоступен\033[0m"
+        echo -e "\033[1;31m❌ Интернет недоступен\033[0m"
         install_mdadm_embedded
     fi
 
     echo -e "\033[1;37mПроверка наличия более двух дисков...\033[0m"
     if [ $(lsblk -dno NAME | wc -l) -le 2 ]; then
-        echo -e "\033[1;37mНедостаточно дисков для создания RAID массива. Требуется как минимум три диска.\033[0m"
+        echo -e "\033[1;31m❌ Недостаточно дисков для создания RAID массива. Требуется как минимум три диска.\033[0m"
         exit 1
     else
         echo -e "\033[1;32m✅ Достаточно дисков для создания RAID массива.\033[0m"
     fi
 
-    echo -e "\033[1;37mПоиск LVM...\033[0m"
+    echo -e "\033[1;37m[i] Поиск LVM...\033[0m"
     mapfile -t lvm_parts < <(lsblk -rpno NAME | grep '/dev/mapper/')
 
     if [ ${#lvm_parts[@]} -eq 0 ]; then
-        echo -e "\033[1;37mLVM тома не найдены через /dev/mapper/.\033[0m"
+        echo -e "\033[1;31m❌ LVM тома не найдены через /dev/mapper/.\033[0m"
         exit 1
     fi
 
@@ -488,6 +488,7 @@ case "$1" in
         ;;
     --help)
         echo "Использование raid-configuration:"
+        echo "  -auto - Автоматический процесс конфигурации"
         echo "  --start - Запустить процесс полностью"
         echo "  --step [1/2] - Запустить процесс конкретного этапа"
         echo "  --help - Показать справку"
@@ -521,7 +522,7 @@ case "$1" in
         exit 1
         ;;
 esac
-
+exit 0
 # == BEGIN EMBEDDED DEB ==
 __B64_LINE__
 ITxhcmNoPgpkZWJpYW4tYmluYXJ5ICAgMTczNzk3NzY2OCAgMCAgICAgMCAgICAgMTAwNjQ0ICA0
