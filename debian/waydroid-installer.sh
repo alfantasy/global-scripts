@@ -48,6 +48,11 @@ install_waydroid() {
     fi
     echo -e "\033[92mWaydroid успешно установлен.\033[0m"
     echo -e "\033[94mДля работы с Waydroid, запустите его через меню приложений, найдя его в списке.\033[0m"
+    echo -e "\033[94mПри работе с GAPPS, не забудьте идентифицировать свое устройств:\033[0m"
+    echo -e "\033[94mОткройте терминал и введите: waydroid shell\033[0m"
+    echo -e "\033[94mANDROID_RUNTIME_ROOT=/apex/com.android.runtime ANDROID_DATA=/data ANDROID_TZDATA_ROOT=/apex/com.android.tzdata ANDROID_I18N_ROOT=/apex/com.android.i18n sqlite3 /data/data/com.google.android.gsf/databases/gservices.db 'select * from main where name = \"android_id\";'\033[0m"
+    echo -e "\033[94mСкопируйте выведенный Вам идентификатор и забейте его на сайт: https://www.google.com/android/uncertified\033[0m"
+    echo -e "\033[94mИзменение будут применены в течении 5-10 минут.\033[0m"
 }
 
 # Проверка прав суперпользователя

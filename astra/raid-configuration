@@ -114,6 +114,28 @@ step_one() {
     for part in "${parent_parts[@]}"; do
         echo "  - $part"
     done
+
+    echo -e "\033[1;37mПоиск диска с аналогичным размером...\033[0m"
+
+    # Получаем имя диска без /dev/
+    base_disk=$(basename "$parent_disk")
+
+    # Получаем размер родительского диска в байтах
+    parent_size=$(lsblk -bdno SIZE "$parent_disk")
+
+    # Ищем диск с таким же размером, исключая текущий
+    mapfile -t equal_disks < <(lsblk -bdno NAME,SIZE | awk -v target="$parent_size" -v exclude="$base_disk" '$1 != exclude && $2 == target {print "/dev/"$1}')
+
+    if [ ${#equal_disks[@]} -gt 0 ]; then
+        echo -e "\033[1;37mНайден диск(и) с таким же размером:\033[0m"
+        for disk in "${equal_disks[@]}"; do
+            echo "  - $disk"
+        done
+        second_disk="${equal_disks[0]}" # можно использовать его дальше
+    else
+        echo -e "\033[1;37m❌ Диск с аналогичным размером не найден.\033[0m"
+        exit 1
+    fi
 }
 
 case "$1" in
