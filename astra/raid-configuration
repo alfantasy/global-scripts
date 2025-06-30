@@ -6,6 +6,8 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+MAIN_LVM_VGID=""
+
 get_parent_disk_from_lvm() {
     local lv_mapper_path="$1"
     local lv_path
@@ -173,7 +175,7 @@ step_one() {
 
     echo -e "\033[1;37mНомер раздела с LVM: $part_number\033[0m"
 
-    
+
 }
 
 case "$1" in
