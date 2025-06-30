@@ -7,8 +7,63 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 CONFIG_FILE="/etc/raid-configuration.conf"
+LOG_FILE="/var/log/raid-configuration.log"
+SERVICE_NAME="raid-configuration"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 
 MAIN_LVM_VGID=""
+
+log() {
+    echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOGFILE"
+}
+
+service_registry() {
+    log -e "\033[1;37mРегистрация сервиса для постреализации...\033[0m"
+
+    if [ -f "$SERVICE_PATH" ]; then
+        log -e "\033[1;37mСервис уже зарегистрирован.\033[0m"
+        return
+    fi
+    cat <<EOF > "$SERVICE_PATH"
+[Unit]
+Description=Специальный скрипт для реализации RAID-массива первого уровня.
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/raid-configuration --daemon-env
+User=root
+Group=root
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    chmod 644 "$SERVICE_PATH"
+    cp "$0" /usr/local/bin/raid-configuration
+    chmod +x /usr/local/bin/raid-configuration
+
+    systemct daemon-reload
+    systemctl enable "$SERVICE_NAME"
+
+    log -e "\033[1;32m✅ Сервис успешно зарегистрирован.\033[0m"
+}
+
+service_unregistry() {
+    log -e "\033[1;37mУдаление сервиса для постреализации...\033[0m"
+
+    if [ ! -f "$SERVICE_PATH" ]; then
+        log -e "\033[1;37mСервис не зарегистрирован.\033[0m"
+        return
+    fi
+
+    systemctl disable "$SERVICE_NAME"
+    rm -f "$SERVICE_PATH"
+    rm -f /usr/local/bin/raid-configuration
+
+    log -e "\033[1;32m✅ Сервис успешно удален.\033[0m"
+}
 
 get_parent_disk_from_lvm() {
     local lv_mapper_path="$1"
@@ -245,17 +300,25 @@ step_one() {
     echo "SECOND_DISK=$second_disk" >> "$CONFIG_FILE"
     echo "PART_NUMBER=$part_number" >> "$CONFIG_FILE"
 
-    echo -e "\033[1;37mКомпьютер будет автоматически перезагружен в течении 15 секунд, после установки запустите процесс второго этапа при помощи команды:\033[0m"
-    echo -e "\033[1;37m./raid-configuration --start\033[0m"
+    echo -e "\033[1;37mКомпьютер будет автоматически перезагружен в течении 30 секунд.\033[0m"
 
-    sleep 15
+    echo -e "\033[1;37mВнимание! После перезагрузки, скрипт автоматически активирует второй этап через автозагрузку, но...\033[0m"
+    echo -e "\033[1;37m...действия скрипта будут выполняться в фоне из-за невозможности запуска сессии fly-dm от имени суперпользователя...\033[0m"
+    echo -e "\033[1;37m..поэтому для отслеживания действий скрипта после перезагрузки и конец его действий, можно посмотреть следующий лог файл:\033[0m"
+    echo -e "\033[1;37m...$LOG_FILE\033[0m"]
+
+    service_registry
+
+    sleep 30
     reboot
 }
 
 step_two() {
-    echo -e "\033[1;37mПослезагрузочный этап...\033[0m"
+    log -e "\033[1;32m✅ Послезагрузочный этап запущен. Скрипт активен.\033[0m"
 
-    echo -e "\033[1;37mПроверка деградированного массива RAID...\033[0m"
+    log -e "\033[1;37mПослезагрузочный этап...\033[0m"
+
+    log -e "\033[1;37mПроверка деградированного массива RAID...\033[0m"
 
     mdadm_output=$(mdadm --detail /dev/md0 2>/dev/null)
 
@@ -264,19 +327,19 @@ step_two() {
     working=$(echo "$mdadm_output" | awk -F': ' '/Working Devices/ {print $2}' | tr -d ' ')
     failed=$(echo "$mdadm_output" | awk -F': ' '/Failed Devices/ {print $2}' | tr -d ' ')
 
-    echo -e "\033[1;37mСостояние массива: $state\033[0m"
-    echo -e "\033[1;37mАктивных устройств: $active, Рабочих: $working, Неисправных: $failed\033[0m"
+    log -e "\033[1;37mСостояние массива: $state\033[0m"
+    log -e "\033[1;37mАктивных устройств: $active, Рабочих: $working, Неисправных: $failed\033[0m"
 
     # Условия: деградирован и одно устройство
     if [[ "$state" == *degraded* && "$active" == "1" && "$working" == "1" && "$failed" == "0" ]]; then
-        echo -e "\033[1;32m✅ Массив действительно деградирован и содержит одно устройство — всё верно.\033[0m"
+        log -e "\033[1;32m✅ Массив действительно деградирован и содержит одно устройство — всё верно.\033[0m"
     else
-        echo -e "\033[1;31m❌ Состояние массива не соответствует ожидаемому (degraded, 1 устройство).\033[0m"
+        log -e "\033[1;31m❌ Состояние массива не соответствует ожидаемому (degraded, 1 устройство).\033[0m"
         exit 1
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "\033[1;31m❌ Файл конфигурации не найден.\033[0m"
+        log -e "\033[1;31m❌ Файл конфигурации не найден.\033[0m"
         exit 1
     fi
 
@@ -284,65 +347,65 @@ step_two() {
     source "$CONFIG_FILE"
 
     if [[ -z "$PARENT_DISK" || -z "$SECOND_DISK" || -z "$PART_NUMBER" ]]; then
-        echo -e "\033[1;31m❌ Не удалось загрузить данные из конфигурационного файла.\033[0m"
+        log -e "\033[1;31m❌ Не удалось загрузить данные из конфигурационного файла.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;32m✅ Данные из конфигурационного файла успешно загружены.\033[0m"
+    log -e "\033[1;32m✅ Данные из конфигурационного файла успешно загружены.\033[0m"
 
-    echo -e "\033[1;37mОсновной диск: $PARENT_DISK\033[0m"
-    echo -e "\033[1;37mВторой диск: $SECOND_DISK\033[0m"
-    echo -e "\033[1;37mНомер диска в RAID: $PART_NUMBER\033[0m"
+    log -e "\033[1;37mОсновной диск: $PARENT_DISK\033[0m"
+    log -e "\033[1;37mВторой диск: $SECOND_DISK\033[0m"
+    log -e "\033[1;37mНомер диска в RAID: $PART_NUMBER\033[0m"
 
-    echo -e "\033[1;37mВыполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
+    log -e "\033[1;37mВыполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
 
     if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
+        log -e "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
+        log -e "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
         exit 1
     fi
 
     if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
+        log -e "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
+        log -e "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;32m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
+    log -e "\033[1;32m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
     
-    echo -e "\033[1;37mМонтирование загрузочного раздела...\033[0m"
+    log -e "\033[1;37mМонтирование загрузочного раздела...\033[0m"
 
     if mount ${SECOND_DISK}2 /mnt >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ Загрузочный раздел успешно монтирован.\033[0m"
+        log -e "\033[1;32m✅ Загрузочный раздел успешно монтирован.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
+        log -e "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37mРегистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
+    log -e "\033[1;37mРегистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
 
     if grub-install --boot-directory /mnt ${SECOND_DISK} >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
+        log -e "\033[1;32m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
+        log -e "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
         exit 1
     fi
 
     if umount ${SECOND_DISK}2 >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ Загрузочный раздел успешно демонтирован.\033[0m"
+        log -e "\033[1;32m✅ Загрузочный раздел успешно демонтирован.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
+        log -e "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37mВосстановление функционала RAID-массива...\033[0m"
+    log -e "\033[1;37mВосстановление функционала RAID-массива...\033[0m"
 
     if mdadm /dev/md0 --add-spare ${PARENT_DISK}${PART_NUMBER} >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ RAID-массив успешно восстановлен.\033[0m"
+        log -e "\033[1;37m✅ RAID-массив успешно восстановлен.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось восстановить RAID-массив.\033[0m"
+        log -e "\033[1;31m❌ Не удалось восстановить RAID-массив.\033[0m"
         exit 1
     fi
 
@@ -350,28 +413,34 @@ step_two() {
     consistency_policy=$(echo "$STATUS_CHECKING" | awk -F': ' '/Consistency Policy/ {print $2}' | xargs)
     raid_state=$(echo "$STATUS_CHECKING" | awk -F': ' '/State/ {print $2}' | xargs)
 
-    echo -e "\033[1;37mСостояние RAID: $raid_state\033[0m"
-    echo -e "\033[1;37mПолитика согласованности: $consistency_policy\033[0m"
+    log -e "\033[1;37mСостояние RAID: $raid_state\033[0m"
+    log -e "\033[1;37mПолитика согласованности: $consistency_policy\033[0m"
 
     # Проверка состояния
-    [[ "$raid_state" == *degraded* ]] && echo -e "\033[1;32m✅ RAID в состоянии деградации.\033[0m" || echo -e "\033[1;31m❌ RAID не деградирован.\033[0m"
-    [[ "$raid_state" == *clean* ]]    && echo -e "\033[1;32m✅ RAID в состоянии чистоты (clean).\033[0m" || echo -e "\033[1;31m❌ RAID не в состоянии clean.\033[0m"
-    [[ "$raid_state" == *recovering* ]] && echo -e "\033[1;32m✅ RAID восстанавливается (recovering).\033[0m" || echo -e "\033[1;33m⚠️ RAID пока не восстанавливается.\033[0m"
+    [[ "$raid_state" == *degraded* ]] && log -e "\033[1;32m✅ RAID в состоянии деградации.\033[0m" || log -e "\033[1;31m❌ RAID не деградирован.\033[0m"
+    [[ "$raid_state" == *clean* ]]    && log -e "\033[1;32m✅ RAID в состоянии чистоты (clean).\033[0m" || log -e "\033[1;31m❌ RAID не в состоянии clean.\033[0m"
+    [[ "$raid_state" == *recovering* ]] && log -e "\033[1;32m✅ RAID восстанавливается (recovering).\033[0m" || log -e "\033[1;33m⚠️ RAID пока не восстанавливается.\033[0m"
 
     # Проверка политики согласованности
-    [[ "$consistency_policy" == *resync* ]] && echo -e "\033[1;32m✅ RAID синхронизируется (resync).\033[0m" || echo -e "\033[1;31m❌ RAID не в процессе resync.\033[0m"
+    [[ "$consistency_policy" == *resync* ]] && log -e "\033[1;32m✅ RAID синхронизируется (resync).\033[0m" || log -e "\033[1;31m❌ RAID не в процессе resync.\033[0m"
 
     # Можно добавить проверку, что degraded + clean = норм для текущего этапа
     if [[ "$raid_state" == *degraded* && "$raid_state" == *clean* ]]; then
-        echo -e "\033[1;32m✅ RAID готов к восстановлению (degraded + clean).\033[0m"
+        log -e "\033[1;32m✅ RAID готов к восстановлению (degraded + clean).\033[0m"
     else
-        echo -e "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления.\033[0m"
+        log -e "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37mВосстановление функционала RAID-массива завершено.\033[0m"
+    log -e "\033[1;37mВосстановление функционала RAID-массива завершено.\033[0m"
 
-    echo -e "\033[1;37m✅ Все этапы завершены.\033[0m"
+    log -e "\033[1;32m✅ Все этапы завершены.\033[0m"
+
+    log -e "\033[1;37mСкрипт автоматически уберет себя из автозагрузки.\033[0m"
+
+    service_unregistry
+
+    exit 0
 }
 
 case "$1" in
@@ -400,11 +469,15 @@ case "$1" in
         echo "  --start - Запустить процесс полностью"
         echo "  --help - Показать справку"
         echo "  --get-vg - Получить главный LVM Volume Group"
+        echo "  --daemon-env - Автозапуск второго этапа конфигурации"
         ;;
     --get-vg)
         MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
         echo -e "\033[1;37mГлавный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
         exit 0
+        ;;
+    --daemon-env)
+        step_two
         ;;
     *)
         echo -e "\033[1;37mНеверная опция: $1. Используйте $0 --help\033[0m" 1>&2
