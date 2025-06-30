@@ -151,7 +151,7 @@ step_one() {
         exit 1
     fi
 
-    if fdisk -d "$parent_disk" | sfdisk "$second_disk" >/dev/null 2>&1; then
+    if sfdisk -d "$parent_disk" | sfdisk "$second_disk" >/dev/null 2>&1; then
         echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось мигрировать таблицу разделов.\033[0m"
