@@ -74,7 +74,6 @@ get_parent_disk_from_lvm() {
 
     echo "[i] Поиск VG для LVM тома: $lv_mapper_path">&2
 
-    # Преобразуем /dev/mapper/VG235-lv_home → /dev/VG235/lv_home
     lv_path=$(echo "$lv_mapper_path" | sed 's|^/dev/mapper/|/dev/|' | sed 's|-|/|')
 
     vg_name=$(lvdisplay "$lv_path" 2>/dev/null | awk -F ' ' '/VG Name/ {print $3}')
