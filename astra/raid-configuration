@@ -152,11 +152,13 @@ step_one() {
     sfdisk -d "$parent_disk" | sfdisk "$second_disk"
     echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
 
-    echo -e "\033[1;37mПоиск физического раздела, где размещён VG $MAIN_LVM_VGID...\033[0m"
-    pv_partition=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$MAIN_LVM_VGID" '$2 == vg {print $1}')
+    VG_NAME="VG$MAIN_LVM_VGID"
+
+    echo -e "\033[1;37mПоиск физического раздела, где размещён VG $VG_NAME...\033[0m"
+    pv_partition=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$VG_NAME" '$2 == vg {print $1}')
 
     if [[ -z "$pv_partition" ]]; then
-        echo -e "\033[1;31m❌ Не удалось найти физический раздел для $MAIN_LVM_VGID\033[0m"
+        echo -e "\033[1;31m❌ Не удалось найти физический раздел для $VG_NAME\033[0m"
         exit 1
     else
         echo -e "\033[1;37m✅ Найден физический раздел: $pv_partition\033[0m"
