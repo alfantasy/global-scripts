@@ -257,10 +257,21 @@ step_two() {
 
     echo -e "\033[1;37mПроверка деградированного массива RAID...\033[0m"
 
-    if mdadm --detail --test /dev/md0 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Деградированный массив RAID успешно проверен.\033[0m"
+    mdadm_output=$(mdadm --detail /dev/md0 2>/dev/null)
+
+    state=$(echo "$mdadm_output" | awk -F': ' '/^State/ {print $2}')
+    active=$(echo "$mdadm_output" | awk -F': ' '/Active Devices/ {print $2}' | tr -d ' ')
+    working=$(echo "$mdadm_output" | awk -F': ' '/Working Devices/ {print $2}' | tr -d ' ')
+    failed=$(echo "$mdadm_output" | awk -F': ' '/Failed Devices/ {print $2}' | tr -d ' ')
+
+    echo -e "\033[1;37mСостояние массива: $state\033[0m"
+    echo -e "\033[1;37mАктивных устройств: $active, Рабочих: $working, Неисправных: $failed\033[0m"
+
+    # Условия: деградирован и одно устройство
+    if [[ "$state" == *degraded* && "$active" == "1" && "$working" == "1" && "$failed" == "0" ]]; then
+        echo -e "\033[1;32m✅ Массив действительно деградирован и содержит одно устройство — всё верно.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось проверить деградированный массив RAID.\033[0m"
+        echo -e "\033[1;31m❌ Состояние массива не соответствует ожидаемому (degraded, 1 устройство).\033[0m"
         exit 1
     fi
 
