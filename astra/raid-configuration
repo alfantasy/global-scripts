@@ -57,14 +57,14 @@ global_configuration() {
             exit 1
         fi
         MAIN_LVM_VGID="$MANUAL_VG_ID"
-        echo -e "\033[1;37mИспользуется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+        echo -e "\033[1;32m✅ Используется мануальный главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
     else
         MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
         if [ -z "$MAIN_LVM_VGID" ]; then
             echo -e "\033[1;37mНе удалось определить главный LVM Volume Group.\033[0m" 1>&2
             exit 1
         else
-            echo -e "\033[1;37mИспользуется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
+            echo -e "\033[1;32m✅ Используется главный LVM Volume Group: $MAIN_LVM_VGID\033[0m"
         fi    
     fi
 }
@@ -76,7 +76,7 @@ step_one() {
     check_internet=$(ping -c 1 google.com >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$check_internet" == "1" ]; then
-        echo -e "\033[1;37mИнтернет доступен\033[0m"
+        echo -e "\033[1;32m✅ Интернет доступен\033[0m"
     else
         echo -e "\033[1;37mИнтернет недоступен\033[0m"
         exit 1
@@ -86,7 +86,7 @@ step_one() {
     install_mdadm=$(apt-get install -y mdadm >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$install_mdadm" == "1" ]; then
-        echo -e "\033[1;37mПакет mdadm установлен\033[0m"
+        echo -e "\033[1;32m✅ Пакет mdadm установлен\033[0m"
     else
         echo -e "\033[1;37mПакет mdadm не установлен\033[0m"
         echo -e "\033[1;37mПроверьте интернет-соединение или /etc/apt/sources.list и повторите попытку\033[0m"
@@ -98,7 +98,7 @@ step_one() {
         echo -e "\033[1;37mНедостаточно дисков для создания RAID массива. Требуется как минимум три диска.\033[0m"
         exit 1
     else
-        echo -e "\033[1;37mДостаточно дисков для создания RAID массива.\033[0m"
+        echo -e "\033[1;32m✅ Достаточно дисков для создания RAID массива.\033[0m"
     fi
 
     echo -e "\033[1;37mПоиск LVM...\033[0m"
@@ -131,7 +131,7 @@ step_one() {
     mapfile -t equal_disks < <(lsblk -bdno NAME,SIZE | awk -v target="$parent_size" -v exclude="$base_disk" '$1 != exclude && $2 == target {print "/dev/"$1}')
 
     if [ ${#equal_disks[@]} -gt 0 ]; then
-        echo -e "\033[1;37mНайден диск(и) с таким же размером:\033[0m"
+        echo -e "\033[1;32m✅ Найден диск(и) с таким же размером:\033[0m"
         for disk in "${equal_disks[@]}"; do
             echo "  - $disk"
         done
@@ -152,7 +152,7 @@ step_one() {
     fi
 
     if sfdisk -d "$parent_disk" | sfdisk "$second_disk" >/dev/null 2>&1; then
-        echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
+        echo -e "\033[1;32m✅ Таблица разделов успешно мигрирована.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось мигрировать таблицу разделов.\033[0m"
         exit 1
@@ -167,7 +167,7 @@ step_one() {
         echo -e "\033[1;31m❌ Не удалось найти физический раздел для $VG_NAME\033[0m"
         exit 1
     else
-        echo -e "\033[1;37m✅ Найден физический раздел: $pv_partition\033[0m"
+        echo -e "\033[1;32m✅ Найден физический раздел: $pv_partition\033[0m"
     fi
 
     # Сохраняем номер раздела, например: sda3 → 3
@@ -177,7 +177,7 @@ step_one() {
     echo -e "\033[1;37mСоздание деградированного массива RAID первого уровня (зеркало)...\033[0m"
 
     if mdadm --create --force --metadata=1.2 /dev/md0 -l 1 -n 2 missing ${second_disk}${part_number} >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Деградированный массив RAID успешно создан.\033[0m"
+        echo -e "\033[1;32m✅ Деградированный массив RAID успешно создан.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось создать деградированный массив RAID.\033[0m"
         exit 1
@@ -186,7 +186,7 @@ step_one() {
     echo -e "\033[1;37mСоздание физического тома в LVM на /dev/md0...\033[0m"
 
     if pvcreate /dev/md0 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Физический том успешно создан в LVM.\033[0m"
+        echo -e "\033[1;32m✅ Физический том успешно создан в LVM.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось создать физический том в LVM.\033[0m"
         exit 1
@@ -199,7 +199,7 @@ step_one() {
     echo -e "\033[1;37mПеремещаем данные из существующего тома с корневой файловой системой на ранее созданный том...\033[0m"
 
     if pvmove ${parent_disk}${part_number} /dev/md0 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Данные успешно перемещены.\033[0m"
+        echo -e "\033[1;32m✅ Данные успешно перемещены.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось переместить данные.\033[0m"
         exit 1
@@ -208,7 +208,7 @@ step_one() {
     echo -e "\033[1;37mИсключаем ${parent_disk}${part_number}  из группы томов...\033[0m"
 
     if vgreduce VG$MAIN_LVM_VGID ${parent_disk}${part_number}  >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ ${parent_disk}${part_number}  успешно исключен из группы томов.\033[0m"
+        echo -e "\033[1;32m✅ ${parent_disk}${part_number}  успешно исключен из группы томов.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось исключить ${parent_disk}${part_number}  из группы томов.\033[0m"
         exit 1
@@ -217,7 +217,7 @@ step_one() {
     echo -e "\033[1;37mУдаление тома ${parent_disk}${part_number}...\033[0m"
 
     if pvremove ${parent_disk}${part_number} >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Том ${parent_disk}${part_number} успешно удален.\033[0m"
+        echo -e "\033[1;32m✅ Том ${parent_disk}${part_number} успешно удален.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось удалить том ${parent_disk}${part_number}.\033[0m"
         exit 1
@@ -227,7 +227,7 @@ step_one() {
 
     if update-initramfs -uk all >/dev/null 2>&1; then
         if update-grub >/dev/null 2>&1; then
-            echo -e "\033[1;37m✅ Системные изменения успешно применены.\033[0m"
+            echo -e "\033[1;32m✅ Системные изменения успешно применены.\033[0m"
         else
             echo -e "\033[1;31m❌ Не удалось применить системные изменения.\033[0m"
             exit 1
@@ -288,34 +288,34 @@ step_two() {
         exit 1
     fi
 
-    echo -e "\033[1;37m✅ Данные из конфигурационного файла успешно загружены.\033[0m"
+    echo -e "\033[1;32m✅ Данные из конфигурационного файла успешно загружены.\033[0m"
 
     echo -e "\033[1;37mОсновной диск: $PARENT_DISK\033[0m"
     echo -e "\033[1;37mВторой диск: $SECOND_DISK\033[0m"
     echo -e "\033[1;37mНомер диска в RAID: $PART_NUMBER\033[0m"
 
-    echo -e "\0333[1;37mВыполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
+    echo -e "\033[1;37mВыполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
 
     if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Миграция первого раздела успешно выполнена.\033[0m"
+        echo -e "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
         exit 1
     fi
 
     if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Миграция второго раздела успешно выполнена.\033[0m"
+        echo -e "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
+    echo -e "\033[1;32m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
     
     echo -e "\033[1;37mМонтирование загрузочного раздела...\033[0m"
 
     if mount ${SECOND_DISK}2 /mnt >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Загрузочный раздел успешно монтирован.\033[0m"
+        echo -e "\033[1;32m✅ Загрузочный раздел успешно монтирован.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
         exit 1
@@ -324,14 +324,14 @@ step_two() {
     echo -e "\033[1;37mРегистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
 
     if grub-install --boot-directory /mnt ${SECOND_DISK} >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
+        echo -e "\033[1;32m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
         exit 1
     fi
 
     if umount ${SECOND_DISK}2 >/dev/null 2>&1; then
-        echo -e "\033[1;37m✅ Загрузочный раздел успешно демонтирован.\033[0m"
+        echo -e "\033[1;32m✅ Загрузочный раздел успешно демонтирован.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
         exit 1
@@ -347,34 +347,26 @@ step_two() {
     fi
 
     STATUS_CHECKING=$(mdadm --detail /dev/md0)
-    consistency_policy=$(echo "$output" | awk -F': ' '/Consistency Policy/ {print $2}')
-    raid_state=$(echo "$output" | awk -F': ' '/^State/ {print $2}')
+    consistency_policy=$(echo "$STATUS_CHECKING" | awk -F': ' '/Consistency Policy/ {print $2}' | xargs)
+    raid_state=$(echo "$STATUS_CHECKING" | awk -F': ' '/State/ {print $2}' | xargs)
 
-    if [[ "$consistency_policy" =~ "resync" ]]; then
-        echo -e "\033[1;37m✅ RAID-массив в состоянии синхронизации.\033[0m"
+    echo -e "\033[1;37mСостояние RAID: $raid_state\033[0m"
+    echo -e "\033[1;37mПолитика согласованности: $consistency_policy\033[0m"
+
+    # Проверка состояния
+    [[ "$raid_state" == *degraded* ]] && echo -e "\033[1;32m✅ RAID в состоянии деградации.\033[0m" || echo -e "\033[1;31m❌ RAID не деградирован.\033[0m"
+    [[ "$raid_state" == *clean* ]]    && echo -e "\033[1;32m✅ RAID в состоянии чистоты (clean).\033[0m" || echo -e "\033[1;31m❌ RAID не в состоянии clean.\033[0m"
+    [[ "$raid_state" == *recovering* ]] && echo -e "\033[1;32m✅ RAID восстанавливается (recovering).\033[0m" || echo -e "\033[1;33m⚠️ RAID пока не восстанавливается.\033[0m"
+
+    # Проверка политики согласованности
+    [[ "$consistency_policy" == *resync* ]] && echo -e "\033[1;32m✅ RAID синхронизируется (resync).\033[0m" || echo -e "\033[1;31m❌ RAID не в процессе resync.\033[0m"
+
+    # Можно добавить проверку, что degraded + clean = норм для текущего этапа
+    if [[ "$raid_state" == *degraded* && "$raid_state" == *clean* ]]; then
+        echo -e "\033[1;32m✅ RAID готов к восстановлению (degraded + clean).\033[0m"
     else
-        echo -e "\033[1;31m❌ RAID-массив не находится в состоянии синхронизации.\033[0m"
-    fi
-
-    if [[ "$raid_state" =~ "clean" ]]; then
-        echo -e "\033[1;37m✅ RAID-массив в состоянии чистоты.\033[0m"
-    else
-        echo -e "\033[1;31m❌ RAID-массив не находится в состоянии чистоты.\033[0m"
-    fi
-
-    if [[ "$raid_state" =~ "degraded" ]]; then
-        echo -e "\033[1;37m✅ RAID-массив в состоянии деградации.\033[0m"
-        if [[ "$consistency_policy" =~ "resync" ]]; then
-            echo -e "\033[1;37m✅ RAID-массив в состоянии синхронизации.\033[0m"
-            if [[ "$raid_state" =~ "recovering" ]]; then
-                echo -e "\033[1;37m✅ RAID-массив в состоянии восстановления.\033[0m"
-            else
-                echo -e "\033[1;31m❌ RAID-массив не находится в состоянии восстановления.\033[0m"
-                exit 1
-            fi
-        else
-            echo -e "\033[1;31m❌ RAID-массив не находится в состоянии синхронизации.\033[0m"
-        fi
+        echo -e "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления.\033[0m"
+        exit 1
     fi
 
     echo -e "\033[1;37mВосстановление функционала RAID-массива завершено.\033[0m"
