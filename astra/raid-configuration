@@ -6,6 +6,8 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+CONFIG_FILE="/etc/raid-configuration.conf"
+
 MAIN_LVM_VGID=""
 
 get_parent_disk_from_lvm() {
@@ -174,9 +176,199 @@ step_one() {
 
     echo -e "\033[1;37mСоздание деградированного массива RAID первого уровня (зеркало)...\033[0m"
 
-    mdadm --create --force /dev/md0 -l 1 -n 2 missing ${second_disk}${part_number}
+    if mdadm --create --force --metadata=1.2 /dev/md0 -l 1 -n 2 missing ${second_disk}${part_number} >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Деградированный массив RAID успешно создан.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось создать деградированный массив RAID.\033[0m"
+        exit 1
+    fi
 
-    echo -e "\033[1:37mRAID-массив успешно создан.\033[0m"
+    echo -e "\033[1;37mСоздание физического тома в LVM на /dev/md0...\033[0m"
+
+    if pvcreate /dev/md0 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Физический том успешно создан в LVM.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось создать физический том в LVM.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mДобавляем том в состав группы томов...\033[0m"
+
+    vgextend VG$MAIN_LVM_VGID /dev/md0
+
+    echo -e "\033[1;37mПеремещаем данные из существующего тома с корневой файловой системой на ранее созданный том...\033[0m"
+
+    if pvmove ${parent_disk}${part_number} /dev/md0 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Данные успешно перемещены.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось переместить данные.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mИсключаем ${parent_disk}${part_number}  из группы томов...\033[0m"
+
+    if vgreduce VG$MAIN_LVM_VGID ${parent_disk}${part_number}  >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ ${parent_disk}${part_number}  успешно исключен из группы томов.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось исключить ${parent_disk}${part_number}  из группы томов.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mУдаление тома ${parent_disk}${part_number}...\033[0m"
+
+    if pvremove ${parent_disk}${part_number} >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Том ${parent_disk}${part_number} успешно удален.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось удалить том ${parent_disk}${part_number}.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mПрименение системных изменений...\033[0m"
+
+    if update-initramfs -uk all >/dev/null 2>&1; then
+        if update-grub >/dev/null 2>&1; then
+            echo -e "\033[1;37m✅ Системные изменения успешно применены.\033[0m"
+        else
+            echo -e "\033[1;31m❌ Не удалось применить системные изменения.\033[0m"
+            exit 1
+        fi
+    else
+        echo -e "\033[1;31m❌ Не удалось применить системные изменения.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mДоперезагрузочный этап завершен.\033[0m"
+
+    echo -e "\033[1;37mСоздание конфигурационного файла для послезагрузочного этапа...\033[0m"
+
+    echo "PARENT_DISK=$parent_disk" > "$CONFIG_FILE"
+    echo "SECOND_DISK=$second_disk" >> "$CONFIG_FILE"
+    echo "PART_NUMBER=$part_number" >> "$CONFIG_FILE"
+
+    echo -e "\033[1;37mКомпьютер будет автоматически перезагружен в течении 15 секунд, после установки запустите процесс второго этапа при помощи команды:\033[0m"
+    echo -e "\033[1;37m./raid-configuration --start\033[0m"
+
+    sleep 15
+    reboot
+}
+
+step_two() {
+    echo -e "\033[1;37mПослезагрузочный этап...\033[0m"
+
+    echo -e "\033[1;37mПроверка деградированного массива RAID...\033[0m"
+
+    if mdadm --detail --test /dev/md0 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Деградированный массив RAID успешно проверен.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось проверить деградированный массив RAID.\033[0m"
+        exit 1
+    fi
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "\033[1;31m❌ Файл конфигурации не найден.\033[0m"
+        exit 1
+    fi
+
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+
+    if [[ -z "$PARENT_DISK" || -z "$SECOND_DISK" || -z "$PART_NUMBER" ]]; then
+        echo -e "\033[1;31m❌ Не удалось загрузить данные из конфигурационного файла.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37m✅ Данные из конфигурационного файла успешно загружены.\033[0m"
+
+    echo -e "\033[1;37mОсновной диск: $PARENT_DISK\033[0m"
+    echo -e "\033[1;37mВторой диск: $SECOND_DISK\033[0m"
+    echo -e "\033[1;37mНомер диска в RAID: $PART_NUMBER\033[0m"
+
+    echo -e "\0333[1;37mВыполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
+
+    if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Миграция первого раздела успешно выполнена.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
+        exit 1
+    fi
+
+    if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Миграция второго раздела успешно выполнена.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
+    
+    echo -e "\033[1;37mМонтирование загрузочного раздела...\033[0m"
+
+    if mount ${SECOND_DISK}2 /mnt >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Загрузочный раздел успешно монтирован.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mРегистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
+
+    if grub-install --boot-directory /mnt ${SECOND_DISK} >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
+        exit 1
+    fi
+
+    if umount ${SECOND_DISK}2 >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ Загрузочный раздел успешно демонтирован.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
+        exit 1
+    fi
+
+    echo -e "\033[1;37mВосстановление функционала RAID-массива...\033[0m"
+
+    if mdadm /dev/md0 --add-spare ${PARENT_DISK}${PART_NUMBER} >/dev/null 2>&1; then
+        echo -e "\033[1;37m✅ RAID-массив успешно восстановлен.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось восстановить RAID-массив.\033[0m"
+        exit 1
+    fi
+
+    STATUS_CHECKING=$(mdadm --detail /dev/md0)
+    consistency_policy=$(echo "$output" | awk -F': ' '/Consistency Policy/ {print $2}')
+    raid_state=$(echo "$output" | awk -F': ' '/^State/ {print $2}')
+
+    if [[ "$consistency_policy" =~ "resync" ]]; then
+        echo -e "\033[1;37m✅ RAID-массив в состоянии синхронизации.\033[0m"
+    else
+        echo -e "\033[1;31m❌ RAID-массив не находится в состоянии синхронизации.\033[0m"
+    fi
+
+    if [[ "$raid_state" =~ "clean" ]]; then
+        echo -e "\033[1;37m✅ RAID-массив в состоянии чистоты.\033[0m"
+    else
+        echo -e "\033[1;31m❌ RAID-массив не находится в состоянии чистоты.\033[0m"
+    fi
+
+    if [[ "$raid_state" =~ "degraded" ]]; then
+        echo -e "\033[1;37m✅ RAID-массив в состоянии деградации.\033[0m"
+        if [[ "$consistency_policy" =~ "resync" ]]; then
+            echo -e "\033[1;37m✅ RAID-массив в состоянии синхронизации.\033[0m"
+            if [[ "$raid_state" =~ "recovering" ]]; then
+                echo -e "\033[1;37m✅ RAID-массив в состоянии восстановления.\033[0m"
+            else
+                echo -e "\033[1;31m❌ RAID-массив не находится в состоянии восстановления.\033[0m"
+                exit 1
+            fi
+        else
+            echo -e "\033[1;31m❌ RAID-массив не находится в состоянии синхронизации.\033[0m"
+        fi
+    fi
+
+    echo -e "\033[1;37mВосстановление функционала RAID-массива завершено.\033[0m"
+
+    echo -e "\033[1;37m✅ Все этапы завершены.\033[0m"
 }
 
 case "$1" in
@@ -192,8 +384,7 @@ case "$1" in
             step_one
             ;;
             2)
-            global_configuration
-            echo -e "\033[1;37mПослезагрузочная реализация\033[0m"
+            step_two
             ;;
             *)
             echo -e "\033[1;37mНеверный номер этапа: $STEP\033[0m" 1>&2
