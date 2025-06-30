@@ -156,7 +156,8 @@ step_one() {
     vg_name="$MAIN_LVM_VGID"
 
     echo -e "\033[1;37mОпределение физического раздела, на котором размещён LVM...\033[0m"
-    pv_device=$(pvs --noheadings -o pv_name,vg_name | awk -v vg="$vg_name" '{gsub(/^ +| +$/, "", $1); gsub(/^ +| +$/, "", $2)} $2 == vg {print $1}' | head -n1)
+    pv_device=$(pvs --noheadings --separator '|' -o pv_name,vg_name \
+    | awk -F'|' -v vg="$vg_name" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == vg) print $1;}' | head -n1)
 
     if [ -z "$pv_device" ]; then
         echo -e "\033[1;37m❌ Не удалось найти физический раздел для VG $vg_name\033[0m"
