@@ -470,9 +470,24 @@ case "$1" in
     --help)
         echo "Использование raid-configuration:"
         echo "  --start - Запустить процесс полностью"
+        echo "  --step [1/2] - Запустить процесс конкретного этапа"
         echo "  --help - Показать справку"
         echo "  --get-vg - Получить главный LVM Volume Group"
         echo "  --daemon-env - Автозапуск второго этапа конфигурации"
+        ;;
+    --step)
+        case "$2" in
+            1)
+            step_one
+            ;;
+            2)
+            step_two
+            ;;
+            *)
+            echo -e "\033[1;37mНеверный номер этапа: $2\033[0m" 1>&2
+            exit 1
+            ;;
+        esac
         ;;
     --get-vg)
         MAIN_LVM_VGID=$(lsblk -o NAME -n -r | grep -oP 'VG\K[0-9]+(?=-lv_)' | sort -u)
