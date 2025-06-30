@@ -14,7 +14,7 @@ SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 MAIN_LVM_VGID=""
 
 log() {
-    echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOGFILE"
+    echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
 
 service_registry() {
@@ -44,7 +44,7 @@ EOF
     cp "$0" /usr/local/bin/raid-configuration
     chmod +x /usr/local/bin/raid-configuration
 
-    systemct daemon-reload
+    systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
 
     log -e "\033[1;32m✅ Сервис успешно зарегистрирован.\033[0m"
@@ -198,6 +198,7 @@ step_one() {
 
     echo -e "\033[1;37mТаблица разделов будет мигрирована с $parent_disk на $second_disk\033[0m"
     read -t 5 -p "Подтвердите действия (y/n): " -n 1 -r
+    echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo -e "\033[1;37mМиграция таблиц разделов...\033[0m"
     else
