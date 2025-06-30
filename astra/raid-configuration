@@ -149,8 +149,12 @@ step_one() {
         exit 1
     fi
 
-    sfdisk -d "$parent_disk" | sfdisk "$second_disk"
-    echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
+    if fdisk -d "$parent_disk" | sfdisk "$second_disk" >/dev/null 2>&1; then
+        echo -e "\033[1;37mТаблица разделов успешно мигрирована.\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось мигрировать таблицу разделов.\033[0m"
+        exit 1
+    fi
 
     VG_NAME="VG$MAIN_LVM_VGID"
 
@@ -167,6 +171,12 @@ step_one() {
     # Сохраняем номер раздела, например: sda3 → 3
     part_number=$(echo "$pv_partition" | grep -oP '\d+$')
     echo -e "\033[1;37mНомер раздела: $part_number\033[0m"
+
+    echo -e "\033[1;37mСоздание деградированного массива RAID первого уровня (зеркало)...\033[0m"
+
+    mdadm --create --force /dev/md0 -l 1 -n 2 missing ${second_disk}${part_number}
+
+    echo -e "\033[1:37mRAID-массив успешно создан.\033[0m"
 }
 
 case "$1" in
