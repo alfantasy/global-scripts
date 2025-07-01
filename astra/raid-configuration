@@ -287,28 +287,34 @@ step_one() {
 
     echo -e "\033[1;37m[i] Перемещаем данные из существующего тома с корневой файловой системой на ранее созданный том...\033[0m"
 
-    if pvmove ${parent_disk}${part_number} /dev/md0 >/dev/null 2>&1; then
+    if [[ "$parent_disk" == *nvme* ]]; then
+        parent_number="${parent_disk}p${part_number}"
+    else
+        parent_number="${parent_disk}${part_number}"
+    fi
+
+    if pvmove ${parent_number} /dev/md0 >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ Данные успешно перемещены.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось переместить данные.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37m[i] Исключаем ${parent_disk}${part_number}  из группы томов...\033[0m"
+    echo -e "\033[1;37m[i] Исключаем ${parent_number}  из группы томов...\033[0m"
 
-    if vgreduce VG$MAIN_LVM_VGID ${parent_disk}${part_number}  >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ ${parent_disk}${part_number}  успешно исключен из группы томов.\033[0m"
+    if vgreduce VG$MAIN_LVM_VGID ${parent_number}  >/dev/null 2>&1; then
+        echo -e "\033[1;32m✅ ${parent_number}  успешно исключен из группы томов.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось исключить ${parent_disk}${part_number}  из группы томов.\033[0m"
+        echo -e "\033[1;31m❌ Не удалось исключить ${parent_number} из группы томов.\033[0m"
         exit 1
     fi
 
-    echo -e "\033[1;37m[i] Удаление тома ${parent_disk}${part_number}...\033[0m"
+    echo -e "\033[1;37m[i] Удаление тома ${parent_number}...\033[0m"
 
-    if pvremove ${parent_disk}${part_number} >/dev/null 2>&1; then
-        echo -e "\033[1;32m✅ Том ${parent_disk}${part_number} успешно удален.\033[0m"
+    if pvremove ${parent_number} >/dev/null 2>&1; then
+        echo -e "\033[1;32m✅ Том ${parent_number} успешно удален.\033[0m"
     else
-        echo -e "\033[1;31m❌ Не удалось удалить том ${parent_disk}${part_number}.\033[0m"
+        echo -e "\033[1;31m❌ Не удалось удалить том ${parent_number}.\033[0m"
         exit 1
     fi
 
@@ -331,6 +337,7 @@ step_one() {
     echo -e "\033[1;37m[i] Создание конфигурационного файла для послезагрузочного этапа...\033[0m"
 
     echo "PARENT_DISK=$parent_disk" > "$CONFIG_FILE"
+    echo "PARENT_NUMBER=$parent_number" >> "$CONFIG_FILE"
     echo "SECOND_DISK=$second_disk" >> "$CONFIG_FILE"
     echo "PART_NUMBER=$part_number" >> "$CONFIG_FILE"
 
@@ -453,7 +460,7 @@ step_two() {
 
     log "\033[1;37m[i] Восстановление функционала RAID-массива...\033[0m"
 
-    if mdadm /dev/md0 --add-spare ${PARENT_DISK}${PART_NUMBER} >/dev/null 2>&1; then
+    if mdadm /dev/md0 --add-spare ${PARENT_NUMBER} >/dev/null 2>&1; then
         log "\033[1;37m✅ RAID-массив успешно восстановлен.\033[0m"
     else
         log "\033[1;31m❌ Не удалось восстановить RAID-массив.\033[0m"
