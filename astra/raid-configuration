@@ -132,7 +132,7 @@ install_mdadm_embedded() {
     echo -e "\033[1;37m[+] Установка mdadm из встроенного base64...\033[0m"
 
     TMP_DEB=$(mktemp /tmp/mdadm.XXXXXX.deb)
-    tail -n +567 "$0" | base64 -d > "$TMP_DEB"
+    tail -n +591 "$0" | base64 -d > "$TMP_DEB"
 
     if dpkg -i "$TMP_DEB" >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ mdadm успешно установлен из встроенного пакета.\033[0m"
@@ -354,6 +354,10 @@ step_one() {
     reboot
 }
 
+grub_install() {
+
+}
+
 step_two() {
     log "\033[1;32m✅ Послезагрузочный этап запущен. Скрипт активен.\033[0m"
 
@@ -400,10 +404,10 @@ step_two() {
 
     log "\033[1;37m[i] Выполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
 
-    boot_part="${SECOND_DISK}p1"  # для NVMe
+    boot_part="${SECOND_DISK}p2"  # для NVMe
     [ -b "$boot_part" ] || boot_part="${SECOND_DISK}1"  # fallback для SATA
 
-    efi_part="${SECOND_DISK}p2"  # для NVMe
+    efi_part="${SECOND_DISK}p1"  # для NVMe
     [ -b "$efi_part" ] || efi_part="${SECOND_DISK}2"  # fallback для SATA
 
     # if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
@@ -435,31 +439,46 @@ step_two() {
     
     log "\033[1;37m[i] Монтирование загрузочного раздела...\033[0m"
 
-    log "\033[1;37[i] Очистка монтированных разделов...\033[0m"
+    log "\033[1;37m[i] Очистка монтированных разделов...\033[0m"
     if $(lsblk | grep -q /mnt); then
         umount -R /mnt
     fi
 
-    if mount ${boot_part} /mnt >/dev/null 2>&1; then
-        log "\033[1;32m✅ Загрузочный раздел успешно монтирован.\033[0m"
+    if [[ "$PARENT_DISK" == *nvme* ]]; then
+        if mount ${boot_part} /mnt >/dev/null 2>&1; then
+            log "\033[1;32m✅ Загрузочный /boot раздел успешно монтирован.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось монтировать загрузочный /boot раздел.\033[0m"
+            exit 1
+        fi
+        if mount ${efi_part} /mnt/efi >/dev/null 2>&1; then
+            log "\033[1;32m✅ Загрузочный /boot/efi раздел успешно монтирован.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось монтировать загрузочный /boot/efi раздел.\033[0m"
+            exit 1
+        fi
     else
-        log "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
-        exit 1
+        if mount ${boot_part} /mnt >/dev/null 2>&1; then
+            log "\033[1;32m✅ Загрузочный /boot раздел успешно монтирован.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось монтировать загрузочный /boot раздел.\033[0m"
+            exit 1
+        fi
     fi
 
     log "\033[1;37m[i] Регистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
 
-    if grub-install --boot-directory /mnt --target=i386-pc ${SECOND_DISK} >/dev/null 2>&1; then
+    if grub-install --boot-directory /mnt ${SECOND_DISK} >/dev/null 2>&1; then
         log "\033[1;32m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
     else
         log "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
         exit 1
     fi
 
-    if umount ${boot_part} >/dev/null 2>&1; then
-        log "\033[1;32m✅ Загрузочный раздел успешно демонтирован.\033[0m"
+    if umount -R /mnt >/dev/null 2>&1; then
+        log "\033[1;32m✅ Загрузочный /boot раздел успешно демонтирован.\033[0m"
     else
-        log "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
+        log "\033[1;31m❌ Не удалось демонтировать загрузочный /boot раздел.\033[0m"
         exit 1
     fi
 
