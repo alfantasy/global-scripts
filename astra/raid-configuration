@@ -94,6 +94,10 @@ get_parent_disk_from_lvm() {
 
     disk=$(lsblk -no PKNAME "$pv" | head -n1 2>/dev/null)
 
+    if echo "$pv" | grep -q 'nvme'; then
+        disk=$(lsblk -no NAME "$pv" 2>/dev/null | head -n1 | sed 's/[0-9]*$//')
+        disk=${disk%p}
+
     if [[ -z "$disk" ]]; then
         echo -e "\033[1;31m❌ Не удалось определить родительский диск.\033[0m">&2
         return 1
@@ -127,7 +131,7 @@ install_mdadm_embedded() {
     echo -e "\033[1;37m[+] Установка mdadm из встроенного base64...\033[0m"
 
     TMP_DEB=$(mktemp /tmp/mdadm.XXXXXX.deb)
-    tail -n +527 "$0" | base64 -d > "$TMP_DEB"
+    tail -n +559 "$0" | base64 -d > "$TMP_DEB"
 
     if dpkg -i "$TMP_DEB" >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ mdadm успешно установлен из встроенного пакета.\033[0m"
@@ -248,12 +252,19 @@ step_one() {
     fi
 
     # Сохраняем номер раздела, например: sda3 → 3
-    part_number=$(echo "$pv_partition" | grep -oP '\d+$')
+    part_number=$(echo "$pv_partition" | grep -oE '[0-9]+$' | grep -oE '[0-9]+')
     echo -e "\033[1;37m[i] Номер раздела: $part_number\033[0m"
 
     echo -e "\033[1;37m[i] Создание деградированного массива RAID первого уровня (зеркало)...\033[0m"
 
-    if mdadm --create --force --metadata=1.2 /dev/md0 -l 1 -n 2 missing ${second_disk}${part_number} >/dev/null 2>&1; then
+    # Замените на:
+    if [[ "$second_disk" == *nvme* ]]; then
+        raid_part="${second_disk}p${part_number}"
+    else
+        raid_part="${second_disk}${part_number}"
+    fi
+
+    if mdadm --create --force --metadata=1.2 /dev/md0 -l 1 -n 2 missing ${raid_part} >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ Деградированный массив RAID успешно создан.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось создать деградированный массив RAID.\033[0m"
@@ -381,19 +392,36 @@ step_two() {
 
     log "\033[1;37m[i] Выполняем миграцию системных и загрузочных разделов посекторно...\033[0m"
 
-    if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
-        log "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
-    else
-        log "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
-        exit 1
-    fi
+    boot_part="${SECOND_DISK}p1"  # для NVMe
+    [ -b "$boot_part" ] || boot_part="${SECOND_DISK}1"  # fallback для SATA
 
-    if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
-        log "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
+    efi_part="${SECOND_DISK}p2"  # для NVMe
+    [ -b "$efi_part" ] || efi_part="${SECOND_DISK}2"  # fallback для SATA
+
+    # if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
+    #     log "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
+    # else
+    #     log "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
+    #     exit 1
+    # fi
+
+    # if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
+    #     log "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
+    # else
+    #     log "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
+    #     exit 1
+    # fi
+
+    # Замените жесткие вызовы dd на:
+    if [ -b "${PARENT_DISK}p1" ]; then
+        # NVMe формат
+        dd if=${PARENT_DISK}p1 of=${SECOND_DISK}p1
+        dd if=${PARENT_DISK}p2 of=${SECOND_DISK}p2
     else
-        log "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
-        exit 1
-    fi
+        # SATA формат
+        dd if=${PARENT_DISK}1 of=${SECOND_DISK}1
+        dd if=${PARENT_DISK}2 of=${SECOND_DISK}2
+    fi    
 
     log "\033[1;32m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
     
@@ -408,7 +436,7 @@ step_two() {
 
     log "\033[1;37m[i] Регистрация и установка GRUB в монтированный раздел с учетом RAID...\033[0m"
 
-    if grub-install --boot-directory /mnt ${SECOND_DISK} >/dev/null 2>&1; then
+    if grub-install --boot-directory /mnt --target=i386-pc ${SECOND_DISK} >/dev/null 2>&1; then
         log "\033[1;32m✅ GRUB успешно установлен в монтированный раздел.\033[0m"
     else
         log "\033[1;31m❌ Не удалось установить GRUB в монтированный раздел.\033[0m"
