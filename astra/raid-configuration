@@ -97,6 +97,7 @@ get_parent_disk_from_lvm() {
     if echo "$pv" | grep -q 'nvme'; then
         disk=$(lsblk -no NAME "$pv" 2>/dev/null | head -n1 | sed 's/[0-9]*$//')
         disk=${disk%p}
+    fi
 
     if [[ -z "$disk" ]]; then
         echo -e "\033[1;31m❌ Не удалось определить родительский диск.\033[0m">&2
@@ -131,7 +132,7 @@ install_mdadm_embedded() {
     echo -e "\033[1;37m[+] Установка mdadm из встроенного base64...\033[0m"
 
     TMP_DEB=$(mktemp /tmp/mdadm.XXXXXX.deb)
-    tail -n +559 "$0" | base64 -d > "$TMP_DEB"
+    tail -n +560 "$0" | base64 -d > "$TMP_DEB"
 
     if dpkg -i "$TMP_DEB" >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ mdadm успешно установлен из встроенного пакета.\033[0m"
