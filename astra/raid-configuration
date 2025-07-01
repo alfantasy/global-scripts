@@ -435,7 +435,12 @@ step_two() {
     
     log "\033[1;37m[i] Монтирование загрузочного раздела...\033[0m"
 
-    if mount ${efi_part} /mnt >/dev/null 2>&1; then
+    log "\033[1;37[i] Очистка монтированных разделов...\033[0m"
+    if $(lsblk | grep -q /mnt); then
+        umount -R /mnt
+    fi
+
+    if mount ${boot_part} /mnt >/dev/null 2>&1; then
         log "\033[1;32m✅ Загрузочный раздел успешно монтирован.\033[0m"
     else
         log "\033[1;31m❌ Не удалось монтировать загрузочный раздел.\033[0m"
@@ -451,7 +456,7 @@ step_two() {
         exit 1
     fi
 
-    if umount ${efi_part} >/dev/null 2>&1; then
+    if umount ${boot_part} >/dev/null 2>&1; then
         log "\033[1;32m✅ Загрузочный раздел успешно демонтирован.\033[0m"
     else
         log "\033[1;31m❌ Не удалось демонтировать загрузочный раздел.\033[0m"
