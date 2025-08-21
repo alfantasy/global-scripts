@@ -54,3 +54,8 @@ raid-configuration --start
 ```bash
 raid-configuration --help
 ```
+
+6. Просмотр логов:
+```bash
+cat /var/log/raid-configuration.log
+```
