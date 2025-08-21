@@ -10,6 +10,8 @@ CONFIG_FILE="/etc/raid-configuration.conf"
 LOG_FILE="/var/log/raid-configuration.log"
 SERVICE_NAME="raid-configuration"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
+NOT_UPDATED_METADATA_RAID=1
+REFRESH_PVMOVE=1
 
 MAIN_LVM_VGID=""
 
@@ -297,7 +299,46 @@ step_one() {
         echo -e "\033[1;32m✅ Данные успешно перемещены.\033[0m"
     else
         echo -e "\033[1;31m❌ Не удалось переместить данные.\033[0m"
-        exit 1
+        if (NOT_UPDATED_METADATA_RAID -eq 0); then
+            exit 1
+        fi
+        if (REFRESH_PVMOVE -eq 1); then
+            REFRESH_PVMOVE=0
+        fi
+    fi
+
+    if (REFRESH_PVMOVE -eq 0); then
+        echo -e "\033[1;37m[i] Данные не были перемещены, поскольку метаданные RAID являются недействительными для текущего случая перемещения.\033[0m"
+        if (NOT_UPDATED_METADATA_RAID -eq 1); then
+            echo -e "\033[1;37m[i] Обновление метаданных RAID...\033[0m"
+            if pvremove /dev/md0 >/dev/null 2>&1; then
+                echo -e "\033[1;32m✅ RAID-массив успешно удален из PV.\033[0m"
+            else
+                echo -e "\033[1;31m❌ Не удалось удалить RAID-массив из PV.\033[0m"
+            fi
+            echo -e "\033[1;37m[i] Удаление RAID-массива...\033[0m"
+            mdadm --stop /dev/md0 >/dev/null 2>&1
+            mdadm --zero-superblock ${raid_part} >/dev/null 2>&1
+            wipefs -f ${raid_part} >/dev/null 2>&1
+            echo -e "\033[1;32m✅ RAID-массив успешно удален.\033[0m"
+        fi
+        echo -e "\033[1;37m[i] Попытка создать другой RAID-массив с метаданными версии 0.9.\033[0m"
+        if mdadm --create --force --metadata=0.9 /dev/md0 -l 1 -n 2 ${parent_number} >/dev/null 2>&1; then
+            echo -e "\033[1;32m✅ RAID-массив успешно создан.\033[0m"
+        else
+            echo -e "\033[1;31m❌ Не удалось создать RAID-массив.\033[0m"
+            exit 1
+        fi
+        echo -e "\033[1;37m[i] Перемещаем данные из существующего тома с корневой файловой системой на ранее созданный том...\033[0m"
+        pvcreate /dev/md0 >/dev/null 2>&1
+        vgextend VG$MAIN_LVM_VGID /dev/md0
+        if pvmove ${parent_number} /dev/md0 >/dev/null 2>&1; then
+            echo -e "\033[1;32m✅ Данные успешно перемещены.\033[0m"
+        else
+            echo -e "\033[1;31m❌ Ни одним из способов не удалось переместить данные.\033[0m"
+            echo -e "\033[1;37mВ данном случае, рекомендуется обратиться к системному администратору для решения проблемы с инициализацией PV.\033[0m"
+            exit 1
+        fi
     fi
 
     echo -e "\033[1;37m[i] Исключаем ${parent_number}  из группы томов...\033[0m"
