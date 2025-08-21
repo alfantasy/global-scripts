@@ -310,6 +310,7 @@ step_one() {
     if [ $REFRESH_PVMOVE -eq 0 ]; then
         echo -e "\033[1;37m[i] Данные не были перемещены, поскольку метаданные RAID являются недействительными для текущего случая перемещения.\033[0m"
         if [ $NOT_UPDATED_METADATA_RAID -eq 1 ]; then
+            vgreduce VG$MAIN_LVM_VGID /dev/md0
             echo -e "\033[1;37m[i] Обновление метаданных RAID...\033[0m"
             if pvremove /dev/md0 >/dev/null 2>&1; then
                 echo -e "\033[1;32m✅ RAID-массив успешно удален из PV.\033[0m"
