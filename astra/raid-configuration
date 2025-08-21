@@ -324,7 +324,7 @@ step_one() {
             echo -e "\033[1;32m✅ RAID-массив успешно удален.\033[0m"
         fi
         echo -e "\033[1;37m[i] Попытка создать другой RAID-массив с метаданными версии 0.9.\033[0m"
-        if mdadm --create --force --metadata=0.9 /dev/md0 -l 1 -n 2 ${raid_part} >/dev/null 2>&1; then
+        if mdadm --create --force --metadata=0.9 /dev/md0 -l 1 -n 2 missing ${raid_part} >/dev/null 2>&1; then
             echo -e "\033[1;32m✅ RAID-массив успешно создан.\033[0m"
         else
             echo -e "\033[1;31m❌ Не удалось создать RAID-массив.\033[0m"
