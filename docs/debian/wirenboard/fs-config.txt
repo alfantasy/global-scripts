@@ -1,0 +1,3 @@
+Для запуска используйте:
+chmod +x fs-config.sh
+./fs-config.sh

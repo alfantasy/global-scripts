@@ -1,0 +1,3 @@
+Запуск: 
+chmod +x l2tp-ipsec-manager.sh
+./l2tp-ipsec-manager.sh
