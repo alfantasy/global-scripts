@@ -97,7 +97,7 @@ EOF
     cat >> "$CONFIG_FILE" <<EOF
     SubSection "Display"
         Depth    24
-        Modes    "$MODE_NAME"
+        Modes    $MODE_NAME
     EndSubSection
 EndSection
 EOF
@@ -134,11 +134,11 @@ resolution_daemon() {
             CURRENT_MODE=$(xrandr --query | grep -A1 "^$MONITOR" | grep -oP '\d+x\d+' | head -1)
             if [ "$CURRENT_MODE" != "$RESOLUTION" ]; then
                 echo "Исправляем разрешение для $MONITOR..."
-                if ! xrandr | grep -q "$MODE_NAME"; then
+                if ! xrandr | grep -q $MODE_NAME; then
                     xrandr --newmode ${MODELINE#Modeline } 2>/dev/null
-                    xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null
+                    xrandr --addmode "$MONITOR" $MODE_NAME 2>/dev/null
                 fi
-                xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE"
+                xrandr --output "$MONITOR" --mode $MODE_NAME --rate "$RATE"
                 echo "Разрешение для $MONITOR установлено в $RESOLUTION."
             fi
         done
@@ -165,10 +165,10 @@ apply_resolution() {
 
         # Принудительно добавляем новый режим
         xrandr --newmode $MODELINE_STR 2>/dev/null || true
-        xrandr --addmode "$MONITOR" "$MODE_NAME" 2>/dev/null || true
+        xrandr --addmode "$MONITOR" $MODE_NAME 2>/dev/null || true
 
         # Применяем режим независимо от наличия в списке EDID
-        xrandr --output "$MONITOR" --mode "$MODE_NAME" --rate "$RATE" || {
+        xrandr --output "$MONITOR" --mode $MODE_NAME --rate "$RATE" || {
             echo "Не удалось применить режим обычным способом. Пробуем через --scale-from..."
             xrandr --output "$MONITOR" --scale-from "$RESOLUTION"
         }
