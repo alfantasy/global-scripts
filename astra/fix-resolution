@@ -201,6 +201,10 @@ WantedBy=graphical.target
 EOF
 
     echo "Регистрация завершена."
+    
+    cp "$0" /usr/local/bin/fix-resolution
+    chmod +x /usr/local/bin/fix-resolution
+
     systemctl daemon-reload
     systemctl enable resolution-fix.service
     systemctl start resolution-fix.service
