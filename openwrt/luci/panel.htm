@@ -1,0 +1,300 @@
+<%+header%>
+
+<h1>Xray Panel</h1>
+
+<!-- ================= Service Status ================= -->
+<div class="cbi-section">
+    <h2>Service Status</h2>
+    <div id="service-status">Loading...</div>
+    <div class="cbi-section-node">
+        <form method="post" action="<%=url('admin/services/xray/action')%>">
+            <input type="hidden" name="token" value="<%=token%>"/>
+            <button class="cbi-button cbi-button-apply" name="exec" value="start">Start</button>
+            <button class="cbi-button cbi-button-reset" name="exec" value="stop">Stop</button>
+            <button class="cbi-button cbi-button-apply" name="exec" value="restart">Restart</button>
+        </form>
+    </div>
+</div>
+
+<hr/>
+
+<!-- ================= Configuration Management + Config List ================= -->
+<div class="cbi-section" style="display:flex; gap:20px; flex-wrap:wrap;">
+    <!-- Left: Active config and form -->
+    <div style="flex:1; min-width:300px;">
+        <h2>Configuration Management</h2>
+        <p>Active config: <span id="active-config"></span></p>
+        <form method="post" action="<%=url('admin/services/xray/save_config')%>">
+            <input type="text" name="config_name" placeholder="config.json" required/>
+            <textarea name="config_content" rows="15" style="width:100%;" placeholder="Paste configuration here"></textarea>
+            <br/>
+            <button class="cbi-button cbi-button-apply">Save New Configuration</button>
+        </form>
+    </div>
+
+    <!-- Right: List of available configs -->
+    <div style="flex:1; min-width:300px;">
+        <h3>Available Configurations</h3>
+        <table class="cbi-section-table" id="configs-table" style="width:100%; table-layout:fixed;">
+            <thead>
+                <tr><th style="width:5%;">ID</th><th style="width:55%;">Path</th><th style="width:40%;">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<hr/>
+
+<!-- ================= Log Viewer ================= -->
+<div class="cbi-section">
+    <h2>
+        Log Viewer 
+        <button id="toggle-logs" class="cbi-button cbi-button-reset" style="font-size:0.8em;">Hide</button>
+    </h2>
+    <pre id="xray-logs" style="max-height:300px; overflow:auto;">Loading logs...</pre>
+</div>
+
+<hr/>
+
+<!-- ================= Configuration Templates ================= -->
+<div class="cbi-section">
+    <h2>Configuration Templates</h2>
+    <p>Click to open template editor:</p>
+    <ul style="display:flex; gap:10px; flex-wrap:wrap; list-style:none; padding:0;">
+        <li><button class="cbi-button" onclick="openTemplateDialog('vless')">VLESS Proxy</button></li>
+        <li><button class="cbi-button" onclick="openTemplateDialog('vmess')">VMess Proxy</button></li>
+        <li><button class="cbi-button" onclick="openTemplateDialog('socks')">Socks Proxy</button></li>
+        <li><button class="cbi-button" onclick="openTemplateDialog('freedom')">Freedom</button></li>
+    </ul>
+</div>
+
+<hr/>
+
+<!-- ================= Template Modal ================= -->
+<div id="template-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999;"></div>
+<div id="template-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:500px; background:#f9f9f9; border-radius:10px; padding:20px; box-shadow:0 5px 15px rgba(0,0,0,0.3); z-index:1000;">
+    <h3 id="template-title" style="margin-top:0;">Edit Template</h3>
+    <label>Inbound Port: <input type="number" id="tmpl-inbound-port" value="10801"></label><br>
+    <label>Inbound Protocol: 
+        <select id="tmpl-inbound-protocol">
+            <option value="http">HTTP</option>
+            <option value="socks">Socks</option>
+        </select>
+    </label><br>
+    <label>Outbound Protocol: 
+        <select id="tmpl-outbound-protocol">
+            <option value="vless">VLESS</option>
+            <option value="vmess">VMess</option>
+            <option value="freedom">Freedom</option>
+        </select>
+    </label><br>
+    <label>Server Address: <input type="text" id="tmpl-server-address" value="IP_ADDRESS"></label><br>
+    <label>Server Port: <input type="number" id="tmpl-server-port" value="443"></label><br>
+    <label>User ID: <input type="text" id="tmpl-user-id" value=""></label><br>
+    <label>Email: <input type="text" id="tmpl-user-email" value="t@t.tt"></label><br>
+    <label>Flow: 
+        <select id="tmpl-flow">
+            <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+            <option value="">None</option>
+        </select>
+    </label><br><br>
+    <button class="cbi-button cbi-button-apply" id="tmpl-insert">Insert into Editor</button>
+    <button class="cbi-button cbi-button-reset" id="tmpl-cancel">Cancel</button>
+</div>
+
+<hr/>
+
+<!-- ================= Upload Configuration ================= -->
+<div class="cbi-section">
+    <h2>Upload Configuration</h2>
+    <form method="post" action="<%=url('admin/services/xray/upload_config')%>" enctype="multipart/form-data">
+        <input type="file" name="upload_file" required/>
+        <button class="cbi-button cbi-button-apply">Upload</button>
+    </form>
+</div>
+
+<script>
+
+const logsPre = document.getElementById("xray-logs");
+const toggleLogsBtn = document.getElementById("toggle-logs");
+let logsVisible = true;
+
+toggleLogsBtn.addEventListener("click", () => {
+    logsVisible = !logsVisible;
+    logsPre.style.display = logsVisible ? "block" : "none";
+    toggleLogsBtn.innerText = logsVisible ? "Hide" : "Show";
+});
+
+
+// ---------------- Service Status ----------------
+let editorInitialized = false;
+
+function updateStatus() {
+    fetch('<%=url("admin/services/xray/status_json")%>')
+    .then(res => res.json())
+    .then(data => {
+        const div = document.getElementById("service-status");
+        div.innerHTML = `<p>Status: ${data.running ? '<span style="color:green">running</span>' : '<span style="color:red">stopped</span>'}</p>`;
+        document.getElementById("active-config").innerText = data.config;
+        if(!editorInitialized){
+            document.querySelector('textarea[name="config_content"]').value = data.config_content || "";
+            document.querySelector('input[name="config_name"]').value = data.config || "";
+            editorInitialized = true;
+        }
+    })
+}
+updateStatus();
+setInterval(updateStatus, 2000);
+
+// ---------------- Log Viewer ----------------
+function updateLogs() {
+    fetch('<%=url("admin/services/xray/logs")%>')
+    .then(res => res.text())
+    .then(text => document.getElementById("xray-logs").innerText = text)
+}
+updateLogs();
+setInterval(updateLogs, 3000);
+
+// ---------------- Multiple Configurations ----------------
+function loadConfigs() {
+    fetch('<%=url("admin/services/xray/configs_json")%>')
+    .then(res => res.json())
+    .then(configs => {
+        const tbody = document.querySelector("#configs-table tbody");
+        tbody.innerHTML = "";
+        configs.forEach(cfg => {
+            const tr = document.createElement("tr");
+            const active = (cfg.id=="1") ? " (active)" : "";
+            tr.innerHTML = `
+                <td>${cfg.id}${active}</td>
+                <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${cfg.path}</td>
+                <td style="display:flex; gap:5px; flex-wrap:wrap;">
+                    ${cfg.id != "1" ? `<form method="post" action='<%=url("admin/services/xray/set_active_config")%>' style="display:inline">
+                        <input type="hidden" name="id" value="${cfg.id}">
+                        <button class="cbi-button cbi-button-apply">Set Active</button>
+                    </form>` : ""}
+                    <button class="cbi-button cbi-button-apply load-config" data-name="${cfg.path}">Load</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll(".load-config").forEach(btn => {
+            btn.addEventListener("click", e => {
+                const name = btn.dataset.name;
+                fetch('<%=url("admin/services/xray/get_config")%>?name=' + encodeURIComponent(name))
+                .then(r => r.json())
+                .then(j => {
+                    const textarea = document.querySelector('textarea[name="config_content"]');
+                    const inputName = document.querySelector('input[name="config_name"]');
+                    textarea.value = j.content;
+                    inputName.value = name;
+                })
+            })
+        })
+    });
+}
+loadConfigs();
+
+// ---------------- Template Modal ----------------
+function showModal() {
+    document.getElementById("template-backdrop").style.display = "block";
+    document.getElementById("template-modal").style.display = "block";
+}
+function hideModal() {
+    document.getElementById("template-backdrop").style.display = "none";
+    document.getElementById("template-modal").style.display = "none";
+}
+
+function openTemplateDialog(type){
+    const modal = document.getElementById("template-modal");
+    const title = document.getElementById("template-title");
+    title.innerText = type.toUpperCase() + " Template";
+
+    // базовые значения
+    let basePort = 10801, baseProtocol="http", outProto="vless";
+    if(type=="vmess") outProto="vmess";
+    if(type=="socks") { baseProtocol="socks"; outProto="socks"; }
+    if(type=="freedom") { outProto="freedom"; baseProtocol="http"; }
+
+    document.getElementById("tmpl-inbound-port").value = basePort;
+    document.getElementById("tmpl-inbound-protocol").value = baseProtocol;
+    document.getElementById("tmpl-outbound-protocol").value = outProto;
+
+    document.getElementById("tmpl-server-address").value = "IP_ADDRESS";
+    document.getElementById("tmpl-server-port").value = 443;
+    document.getElementById("tmpl-user-id").value = "";
+    document.getElementById("tmpl-user-email").value = "t@t.tt";
+    document.getElementById("tmpl-flow").value = "xtls-rprx-vision";
+
+    modal.style.display = "block";
+    showModal();
+}
+
+document.getElementById("tmpl-insert").addEventListener("click", ()=>{
+    const textarea = document.querySelector('textarea[name="config_content"]');
+    const inputName = document.querySelector('input[name="config_name"]');
+
+    const conf = {
+        log: {access:"", error:"", loglevel:"warning"},
+        inbounds:[{
+            tag:"http-in",
+            port: parseInt(document.getElementById("tmpl-inbound-port").value),
+            listen:"127.0.0.1",
+            protocol: document.getElementById("tmpl-inbound-protocol").value,
+            sniffing:null,
+            settings:{auth:null, udp:true, ip:null, address:null, clients:null, decryption:null, allowTransparent:false, accounts:null},
+            streamSettings:null
+        }],
+        outbounds:[{
+            tag:"proxy-out",
+            protocol: document.getElementById("tmpl-outbound-protocol").value,
+            settings:{
+                vnext:[{
+                    address: document.getElementById("tmpl-server-address").value,
+                    port: parseInt(document.getElementById("tmpl-server-port").value),
+                    users:[{
+                        id: document.getElementById("tmpl-user-id").value,
+                        email: document.getElementById("tmpl-user-email").value,
+                        security:null,
+                        encryption:"none",
+                        flow: document.getElementById("tmpl-flow").value
+                    }]
+                }],
+                servers:null, response:null, domainStrategy:null, userLevel:0
+            },
+            streamSettings:{
+                network:"tcp",
+                security:"reality",
+                realitySettings:{show:false, fingerprint:"chrome", serverName:"google.com", publicKey:"PUB_KEY", shortId:"SHORT_ID", spiderX:"/"}
+            },
+            mux:null
+        },{
+            tag:"block", protocol:"blackhole"
+        },{
+            tag:"DIRECT", protocol:"freedom"
+        }],
+        stats:null, api:null, policy:null, dns:null,
+        routing:{
+            domainStrategy:"IPIfNonMatch",
+            rules:[
+                {type:"field", domain:["geosite:category-ads-all"], outboundTag:"block"},
+                {type:"field", domain:["geosite:category-ru"], outboundTag:"DIRECT"},
+                {type:"field", ip:["geoip:private"], outboundTag:"DIRECT"}
+            ]
+        }
+    };
+
+    textarea.value = JSON.stringify(conf,null,4);
+    inputName.value = "new_template.json";
+    document.getElementById("template-modal").style.display="none";
+    hideModal();
+});
+
+document.getElementById("tmpl-cancel").addEventListener("click", ()=>{
+    document.getElementById("template-modal").style.display="none";
+    hideModal();
+});
+</script>
+
+<%+footer%>
