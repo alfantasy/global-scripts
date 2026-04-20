@@ -134,7 +134,7 @@ install_mdadm_embedded() {
     echo -e "\033[1;37m[+] Установка mdadm из встроенного base64...\033[0m"
 
     TMP_DEB=$(mktemp /tmp/mdadm.XXXXXX.deb)
-    tail -n +629 "$0" | base64 -d > "$TMP_DEB"
+    tail -n +653 "$0" | base64 -d > "$TMP_DEB"
 
     if dpkg -i "$TMP_DEB" >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ mdadm успешно установлен из встроенного пакета.\033[0m"
@@ -465,12 +465,32 @@ step_two() {
     # Замените жесткие вызовы dd на:
     if [ -b "${PARENT_DISK}p1" ]; then
         # NVMe формат
-        dd if=${PARENT_DISK}p1 of=${SECOND_DISK}p1
-        dd if=${PARENT_DISK}p2 of=${SECOND_DISK}p2
+        if dd if=${PARENT_DISK}p1 of=${SECOND_DISK}p1 >/dev/null 2>&1; then
+            log "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
+            log "[$(date '+%Y-%m-%d %H:%M:%S')] dd if=${PARENT_DISK}p1 of=${SECOND_DISK}p1 (выполните команду вручную)"
+        fi
+        if dd if=${PARENT_DISK}p2 of=${SECOND_DISK}p2 >/dev/null 2>&1; then
+            log "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
+            log "[$(date '+%Y-%m-%d %H:%M:%S')] dd if=${PARENT_DISK}p2 of=${SECOND_DISK}p2 (выполните команду вручную)"
+        fi
     else
         # SATA формат
-        dd if=${PARENT_DISK}1 of=${SECOND_DISK}1
-        dd if=${PARENT_DISK}2 of=${SECOND_DISK}2
+        if dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 >/dev/null 2>&1; then
+            log "\033[1;32m✅ Миграция первого раздела успешно выполнена.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось выполнить миграцию первого раздела.\033[0m"
+            log "[$(date '+%Y-%m-%d %H:%M:%S')] dd if=${PARENT_DISK}1 of=${SECOND_DISK}1 (выполните команду вручную)"
+        fi
+        if dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 >/dev/null 2>&1; then
+            log "\033[1;32m✅ Миграция второго раздела успешно выполнена.\033[0m"
+        else
+            log "\033[1;31m❌ Не удалось выполнить миграцию второго раздела.\033[0m"
+            log "[$(date '+%Y-%m-%d %H:%M:%S')] dd if=${PARENT_DISK}2 of=${SECOND_DISK}2 (выполните команду вручную)"
+        fi
     fi    
 
     log "\033[1;32m✅ Миграция системных и загрузочных разделов успешно выполнена.\033[0m"
@@ -548,8 +568,13 @@ step_two() {
     if [[ "$raid_state" == *degraded* && "$raid_state" == *clean* ]]; then
         log "\033[1;32m✅ RAID готов к восстановлению (degraded + clean).\033[0m"
     else
-        log "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления.\033[0m"
-        exit 1
+        log "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления. Проверьте состояние массива: mdadm --detail /dev/md0\033[0m"
+    fi
+
+    if [[ "$raid_state" == *recovering* && "$consistency_policy" == *resync* ]]; then
+        log "\033[1;32m✅ RAID готов к восстановлению (recovering + resync).\033[0m"
+    else
+        log "\033[1;31m❌ RAID не в ожидаемом состоянии для восстановления. Проверьте состояние массива: mdadm --detail /dev/md0\033[0m"
     fi
 
     log "\033[1;37m[i] Восстановление функционала RAID-массива завершено.\033[0m"
