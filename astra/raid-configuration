@@ -134,7 +134,7 @@ install_mdadm_embedded() {
     echo -e "\033[1;37m[+] Установка mdadm из встроенного base64...\033[0m"
 
     TMP_DEB=$(mktemp /tmp/mdadm.XXXXXX.deb)
-    tail -n +653 "$0" | base64 -d > "$TMP_DEB"
+    tail -n +660 "$0" | base64 -d > "$TMP_DEB"
 
     if dpkg -i "$TMP_DEB" >/dev/null 2>&1; then
         echo -e "\033[1;32m✅ mdadm успешно установлен из встроенного пакета.\033[0m"
@@ -148,6 +148,13 @@ install_mdadm_embedded() {
 
 install_mdadm() {
     echo -e "\033[1;37m[i] Установка специального пакета для работы с RAID-массивами...\033[0m"
+    if apt-get update >/dev/null 2>&1; then
+        echo -e "\033[1;32m✅ Список пакетов обновлен\033[0m"
+    else
+        echo -e "\033[1;31m❌ Не удалось обновить список пакетов\033[0m"
+        echo -e "\033[1;32m✅ Установка специального пакета для работы с RAID-массивами из локали...\033[0m"]
+        install_mdadm_embedded
+    fi
     install_mdadm=$(apt-get install -y mdadm >/dev/null 2>&1 && echo "1" || echo "0")
 
     if [ "$install_mdadm" == "1" ]; then
